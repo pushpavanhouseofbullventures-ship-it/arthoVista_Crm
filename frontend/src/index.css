@@ -1,0 +1,415 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-canvas: #f8fafc;
+    --bg-surface: #ffffff;
+    --border-subtle: #f1f5f9;
+    --border-card: #e2e8f0;
+  }
+
+  body {
+    @apply bg-slate-50/80 text-slate-900 font-sans antialiased dark:bg-dark-950 dark:text-dark-50;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    color: #0f172a;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .dark body {
+    color: #f8fafc;
+  }
+
+  /* Universal high-contrast readability enhancements */
+  input,
+  select,
+  textarea {
+    color: #0f172a;
+  }
+
+  .dark input,
+  .dark select,
+  .dark textarea {
+    color: #f8fafc;
+  }
+
+  input::placeholder,
+  textarea::placeholder,
+  select::placeholder {
+    color: #64748b;
+    opacity: 0.9;
+  }
+
+  .dark input::placeholder,
+  .dark textarea::placeholder {
+    color: #94a3b8;
+    opacity: 0.9;
+  }
+
+  ::selection {
+    background-color: #3b82f6;
+    color: #ffffff;
+  }
+}
+
+/* High-contrast clarity overrides for readable UI copy */
+.text-subtle {
+  color: #334155;
+}
+
+.dark .text-subtle {
+  color: #cbd5e1;
+}
+
+/* Elevate faint slate-400 / slate-500 / gray-400 classes to ensure WCAG AAA readability */
+.text-slate-400 {
+  color: #475569 !important;
+}
+
+.dark .text-slate-400 {
+  color: #cbd5e1 !important;
+}
+
+.text-slate-500 {
+  color: #334155 !important;
+}
+
+.dark .text-slate-500 {
+  color: #e2e8f0 !important;
+}
+
+.text-gray-400 {
+  color: #4b5563 !important;
+}
+
+.dark .text-gray-400 {
+  color: #cbd5e1 !important;
+}
+
+.text-gray-500 {
+  color: #374151 !important;
+}
+
+.dark .text-gray-500 {
+  color: #e5e7eb !important;
+}
+
+.text-dark-400 {
+  color: #cbd5e1 !important;
+}
+
+.text-dark-500 {
+  color: #e2e8f0 !important;
+}
+
+
+/* Custom Scrollbar & Layout Stability */
+html {
+  scrollbar-gutter: stable;
+}
+
+/* Prevent resize vibration & layout thrashing when dragging DevTools or resizing window */
+.resize-animation-stopper,
+.resize-animation-stopper *,
+.resize-animation-stopper *::before,
+.resize-animation-stopper *::after {
+  transition: none !important;
+  animation: none !important;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-200 hover:bg-slate-300 dark:bg-dark-800 dark:hover:bg-dark-700 rounded-full transition-colors;
+}
+
+/* Enterprise Glass & Border Utilities */
+.surface-card {
+  background-color: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 1rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.02);
+}
+
+.dark .surface-card {
+  background-color: #0f172a;
+  border-color: rgba(30, 41, 59, 0.8);
+}
+
+.surface-card-hover {
+  transition: all 0.2s ease-in-out;
+}
+
+.surface-card-hover:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -2px rgba(0, 0, 0, 0.03);
+}
+
+.surface-luminous {
+  background-color: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.7);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 2px 4px 0 rgba(0, 0, 0, 0.02), 0 12px 24px -4px rgba(0, 0, 0, 0.04);
+}
+
+.dark .surface-luminous {
+  background-color: #0f172a;
+  border-color: rgba(30, 41, 59, 0.8);
+}
+
+.badge-glow-blue {
+  box-shadow: 0 0 12px -2px rgba(59, 130, 246, 0.25);
+}
+
+.badge-glow-emerald {
+  box-shadow: 0 0 12px -2px rgba(16, 185, 129, 0.25);
+}
+
+/* =========================================================
+   Print Optimization & Executive Document Styles
+   ========================================================= */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 6mm 8mm;
+  }
+
+  /* Force entire document into clean, crisp light mode */
+  *,
+  *::before,
+  *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  html,
+  html.dark,
+  body,
+  html.dark body,
+  #root,
+  html.dark #root,
+  main,
+  html.dark main,
+  .h-screen,
+  html.dark .h-screen,
+  div,
+  html.dark div,
+  section,
+  article {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  /* Hide app chrome: sidebar, top header, action toolbars, floating elements */
+  aside,
+  header,
+  nav,
+  .no-print,
+  [data-no-print],
+  button,
+  .print-hidden {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    border: none !important;
+  }
+
+  /* Printable document container styling */
+  .printable-document {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 265mm !important;
+    max-height: 275mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  .printable-document,
+  .printable-document * {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .printable-document p,
+  .printable-document span,
+  .printable-document td,
+  .printable-document th,
+  .printable-document div,
+  .printable-document label,
+  .printable-document h1,
+  .printable-document h2,
+  .printable-document h3,
+  .printable-document h4 {
+    color: #000000 !important;
+  }
+
+  /* Secondary & italic text legible in print */
+  .printable-document .text-slate-400,
+  .printable-document .text-slate-500,
+  .printable-document .text-slate-600,
+  .printable-document .text-slate-700 {
+    color: #1e293b !important;
+  }
+
+  /* Specific accents when desired */
+  .printable-document .text-emerald-600,
+  .printable-document .text-emerald-700,
+  .printable-document .text-emerald-800 {
+    color: #047857 !important;
+  }
+
+  .printable-document .text-blue-600,
+  .printable-document .text-blue-700,
+  .printable-document .text-blue-800 {
+    color: #000000 !important;
+    font-weight: 800 !important;
+  }
+
+  .printable-document .text-amber-600,
+  .printable-document .text-amber-700,
+  .printable-document .text-amber-800 {
+    color: #92400e !important;
+    font-weight: 700 !important;
+  }
+
+  /* Table styling */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  th,
+  td {
+    border-color: #e2e8f0 !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  .print-avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}
+
+/* =========================================================================
+   Brand Logo 45-Degree Tri-Color System (Orange #fe7c02 -> Blue #0062d1 -> Green #028825)
+   ========================================================================= */
+
+/* 45-Degree Brand Gradient Fill */
+.brand-tri-45 {
+  background: linear-gradient(135deg, #fe7c02 0%, #0062d1 50%, #028825 100%);
+}
+
+.brand-tri-45-reverse {
+  background: linear-gradient(45deg, #028825 0%, #0062d1 50%, #fe7c02 100%);
+}
+
+/* 45-Degree Brand Gradient Text */
+.brand-tri-text-45 {
+  background: linear-gradient(135deg, #fe7c02 0%, #0062d1 50%, #028825 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* 45-Degree Topbar Stripe */
+.brand-topbar-stripe {
+  height: 3px;
+  width: 100%;
+  background: linear-gradient(135deg, #fe7c02 0%, #0062d1 50%, #028825 100%);
+}
+
+/* 45-Degree Brand Action Buttons */
+.btn-tri-45 {
+  background: linear-gradient(135deg, #fe7c02 0%, #0062d1 52%, #028825 100%);
+  color: #ffffff;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 14px -2px rgba(0, 98, 209, 0.3), 0 2px 6px -1px rgba(254, 124, 2, 0.25);
+}
+
+.btn-tri-45:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px -2px rgba(0, 98, 209, 0.4), 0 4px 10px -1px rgba(254, 124, 2, 0.35);
+}
+
+.btn-tri-45:active {
+  transform: translateY(0);
+}
+
+.btn-orange-45 {
+  background: linear-gradient(135deg, #fe7c02 0%, #ea580c 100%);
+  color: #ffffff;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px -2px rgba(254, 124, 2, 0.35);
+}
+
+.btn-orange-45:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.btn-blue-45 {
+  background: linear-gradient(135deg, #0062d1 0%, #1d4ed8 100%);
+  color: #ffffff;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px -2px rgba(0, 98, 209, 0.35);
+}
+
+.btn-blue-45:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.btn-green-45 {
+  background: linear-gradient(135deg, #028825 0%, #16a34a 100%);
+  color: #ffffff;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px -2px rgba(2, 136, 37, 0.35);
+}
+
+.btn-green-45:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
