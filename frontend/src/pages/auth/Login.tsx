@@ -67,7 +67,7 @@ export const Login: React.FC = () => {
           </label>
           <input
             type="email"
-            placeholder="shivamthakur12012@gmail.com"
+            placeholder="shivam.arthaventures@gmail.com"
             {...register('email')}
             className={`w-full px-4 py-2.5 rounded-lg border text-sm bg-slate-50 dark:bg-dark-950 text-slate-950 dark:text-white focus:outline-none focus:ring-1 focus:ring-primary-500 transition-all ${errors.email ? 'border-red-500' : 'border-slate-200 dark:border-dark-800'
               }`}

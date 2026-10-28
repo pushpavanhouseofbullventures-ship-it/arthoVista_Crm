@@ -11,7 +11,7 @@ function checkIsAdmin(req: Request): boolean {
   const userRole = (req as any).userRole;
   return (
     ['Super Admin', 'Admin', 'Manager'].includes(userRole) ||
-    req.user?.email === 'shivamthakur12012@gmail.com'
+    ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(req.user?.email || '')
   );
 }
 
@@ -71,7 +71,7 @@ export async function getHRLeads(req: Request, res: Response, next: NextFunction
     const leadsWithCallInfo = await Promise.all(
       leads.map(async (lead: any) => {
         const leadObj = lead.toObject ? lead.toObject() : lead;
-        
+
         // Find recent calls from FollowUp (includes both Web dialer and Android SIM Sync APK)
         const callLogs = await FollowUp.find({
           organizationId: orgId,

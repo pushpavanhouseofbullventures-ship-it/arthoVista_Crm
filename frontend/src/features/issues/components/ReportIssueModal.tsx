@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  X, AlertTriangle, Bug, Upload, Image as ImageIcon, CheckCircle2,
-  Sparkles, Monitor, Link as LinkIcon, Info, Loader2, AlertCircle, Trash2
+  X, Bug, Upload, CheckCircle2,
+  Monitor, Link as LinkIcon, Info, Loader2, AlertCircle, Trash2
 } from 'lucide-react';
 import { api } from '../../../services/api';
 import { useAuthStore } from '../../../store/authStore';

@@ -628,17 +628,28 @@ export function wrapDocument<T = any>(rawDoc: any, modelName: string, delegate: 
   // Populate relation aliases if present
   for (const [fk, rel] of Object.entries(RELATION_FIELD_MAP)) {
     if (doc[rel] !== undefined) {
+      if (['convertedQuotationId', 'convertedInvoiceId', 'invoiceId', 'invoice'].includes(fk)) {
+        if (Array.isArray(doc[rel])) {
+          doc[fk] = doc[rel].length > 0 ? wrapDocument(doc[rel][0], rel.slice(0, -1), (prisma as any)[rel.slice(0, -1)]) : null;
+          continue;
+        }
+      }
       doc[fk] = wrapDocument(doc[rel], rel, (prisma as any)[rel]);
       doc[rel] = doc[fk];
     }
   }
 
-  if (Array.isArray(doc.quotations) && doc.quotations.length > 0) {
-    doc.convertedQuotationId = wrapDocument(doc.quotations[0], 'quotation', (prisma as any).quotation);
+  if (Array.isArray(doc.quotations)) {
+    doc.convertedQuotationId = doc.quotations.length > 0
+      ? wrapDocument(doc.quotations[0], 'quotation', (prisma as any).quotation)
+      : null;
   }
-  if (Array.isArray(doc.invoices) && doc.invoices.length > 0) {
-    doc.convertedInvoiceId = wrapDocument(doc.invoices[0], 'invoice', (prisma as any).invoice);
-    doc.invoiceId = wrapDocument(doc.invoices[0], 'invoice', (prisma as any).invoice);
+  if (Array.isArray(doc.invoices)) {
+    const inv = doc.invoices.length > 0
+      ? wrapDocument(doc.invoices[0], 'invoice', (prisma as any).invoice)
+      : null;
+    doc.convertedInvoiceId = inv;
+    doc.invoiceId = inv;
   }
 
   return doc as T;

@@ -1,28 +1,25 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../../services/api';
-import { useAuthStore } from '../../../store/authStore';
 import { 
   Calendar, Phone, Mail, MessageSquare, Plus, 
   CheckCircle2, AlertCircle, X, 
   ExternalLink, Send, RefreshCw, Search,
   Clock, PhoneCall,
-  Users, Sparkles, Flame, Trophy, XCircle,
-  Copy, Check, Zap, Eye, GitBranch, Filter
+  Users, Trophy, XCircle,
+  Copy, Check, Eye, GitBranch, Filter
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export const FollowUpPlanner: React.FC = () => {
   const queryClient = useQueryClient();
-  const { user, organizations, activeOrganizationId } = useAuthStore();
-  const activeOrg = organizations.find(org => org.id === activeOrganizationId) || organizations[0];
-  const activeRole = activeOrg?.role || (user?.email === 'shivamthakur12012@gmail.com' ? 'Admin' : 'Sale Executive');
-  const isPrivileged = ['Admin', 'Super Admin', 'Manager', 'Team Leader'].includes(activeRole) || user?.email === 'shivamthakur12012@gmail.com';
 
-  // Filter States
+
+  // Filter States - Only 2 Sub Pipelines: Pending and Upcoming
+  const [subPipeline, setSubPipeline] = useState<'pending' | 'upcoming'>('pending');
   const [channelFilter, setChannelFilter] = useState<string>('all');
-  const [periodFilter, setPeriodFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [periodFilter, setPeriodFilter] = useState<string>('pending');
+  const [statusFilter, setStatusFilter] = useState<string>('pending');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
 
@@ -40,6 +37,7 @@ export const FollowUpPlanner: React.FC = () => {
     staleTime: 60 * 1000
   });
   const leadCounts = leadsResponse || { all: 0, today: 0, open: 0, converted: 0, lost: 0 };
+  void leadCounts;
 
   // Modals
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -92,7 +90,7 @@ export const FollowUpPlanner: React.FC = () => {
 
   // 1. Fetch FollowUps & Global Stats
   const { data: followupsResponse, isLoading: isFollowupsLoading, isFetching, refetch } = useQuery({
-    queryKey: ['followups-planner', channelFilter, periodFilter, statusFilter],
+    queryKey: ['followups-planner', channelFilter, periodFilter, statusFilter, subPipeline],
     queryFn: async () => {
       const params: any = {};
       if (channelFilter !== 'all') params.channel = channelFilter;
@@ -111,6 +109,7 @@ export const FollowUpPlanner: React.FC = () => {
     email: 0,
     phone: 0,
     pending: 0,
+    upcoming: 0,
     completed: 0,
     todayDue: 0,
     overdue: 0
@@ -551,51 +550,23 @@ export const FollowUpPlanner: React.FC = () => {
             </div>
           </div>
 
-          {/* Row 1: Pipeline Stage Tabs (Full-width 6-col grid) */}
-          <div className="w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-2.5">
-            {/* All Leads */}
+          {/* Row 1: Pipeline Stage Tabs (Merged 4-tab grid: Leads, Follow-Up, Converted, Lost Leads) */}
+          <div className="w-full grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-2 sm:gap-2.5">
+            {/* 1. Leads (Merged from My Leads, New Leads & Open Leads) */}
             <Link
               to="/crm/leads"
               className="group relative flex items-center justify-between p-2.5 sm:px-3 sm:py-2.5 rounded-xl text-xs font-bold transition-all duration-200 border cursor-pointer bg-slate-50/70 hover:bg-white dark:bg-dark-800/60 dark:hover:bg-dark-750 text-slate-700 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 hover:border-blue-400/60 dark:hover:border-blue-600/60 hover:text-blue-600 dark:hover:text-blue-400 shadow-2xs"
             >
               <div className="flex items-center space-x-2 truncate">
                 <Users className="h-4 w-4 shrink-0 transition-colors text-blue-500 group-hover:scale-110" />
-                <span className="truncate">{isPrivileged ? 'All Leads' : 'My Leads'}</span>
+                <span className="truncate">Leads</span>
               </div>
               <span className="px-2 py-0.5 rounded-full text-xs font-black shrink-0 ml-1.5 transition-colors bg-slate-200/60 dark:bg-dark-700 text-slate-700 dark:text-slate-300 border border-slate-300/40 dark:border-dark-600/50">
-                {leadCounts.all}
+                {leadCounts.all ?? 0}
               </span>
             </Link>
 
-            {/* New Leads */}
-            <Link
-              to="/crm/today-leads"
-              className="group relative flex items-center justify-between p-2.5 sm:px-3 sm:py-2.5 rounded-xl text-xs font-bold transition-all duration-200 border cursor-pointer bg-slate-50/70 hover:bg-white dark:bg-dark-800/60 dark:hover:bg-dark-750 text-slate-700 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 hover:border-orange-400/60 dark:hover:border-orange-600/60 hover:text-orange-600 dark:hover:text-orange-400 shadow-2xs"
-            >
-              <div className="flex items-center space-x-2 truncate">
-                <Sparkles className="h-4 w-4 shrink-0 transition-colors text-[#fe7c02] group-hover:scale-110" />
-                <span className="truncate">New Leads</span>
-              </div>
-              <span className="px-2 py-0.5 rounded-full text-xs font-black shrink-0 ml-1.5 transition-colors bg-slate-200/60 dark:bg-dark-700 text-slate-700 dark:text-slate-300 border border-slate-300/40 dark:border-dark-600/50">
-                {leadCounts.today ?? 0}
-              </span>
-            </Link>
-
-            {/* Open Leads */}
-            <Link
-              to="/crm/open-leads"
-              className="group relative flex items-center justify-between p-2.5 sm:px-3 sm:py-2.5 rounded-xl text-xs font-bold transition-all duration-200 border cursor-pointer bg-slate-50/70 hover:bg-white dark:bg-dark-800/60 dark:hover:bg-dark-750 text-slate-700 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 hover:border-amber-400/60 dark:hover:border-amber-600/60 hover:text-amber-600 dark:hover:text-amber-400 shadow-2xs"
-            >
-              <div className="flex items-center space-x-2 truncate">
-                <Flame className="h-4 w-4 shrink-0 transition-colors text-amber-500 group-hover:scale-110" />
-                <span className="truncate">Open Leads</span>
-              </div>
-              <span className="px-2 py-0.5 rounded-full text-xs font-black shrink-0 ml-1.5 transition-colors bg-slate-200/60 dark:bg-dark-700 text-slate-700 dark:text-slate-300 border border-slate-300/40 dark:border-dark-600/50">
-                {leadCounts.open}
-              </span>
-            </Link>
-
-            {/* Follow-Up (ACTIVE) */}
+            {/* 2. Follow-Up (ACTIVE) */}
             <Link
               to="/crm/followups"
               className="group relative flex items-center justify-between p-2.5 sm:px-3 sm:py-2.5 rounded-xl text-xs font-bold transition-all duration-200 border cursor-pointer btn-blue-45 text-white border-blue-500 shadow-md shadow-blue-500/30 ring-2 ring-blue-400/40"
@@ -605,11 +576,11 @@ export const FollowUpPlanner: React.FC = () => {
                 <span className="truncate">Follow-Up</span>
               </div>
               <span className="px-2 py-0.5 rounded-full text-xs font-black shrink-0 ml-1.5 bg-white/20 text-white backdrop-blur-xs border border-white/25">
-                {stats.total}
+                {(stats.pending ?? 0) + (stats.upcoming ?? 0)}
               </span>
             </Link>
 
-            {/* Converted */}
+            {/* 3. Converted */}
             <Link
               to="/crm/converted-leads"
               className="group relative flex items-center justify-between p-2.5 sm:px-3 sm:py-2.5 rounded-xl text-xs font-bold transition-all duration-200 border cursor-pointer bg-slate-50/70 hover:bg-white dark:bg-dark-800/60 dark:hover:bg-dark-750 text-slate-700 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 hover:border-emerald-400/60 dark:hover:border-emerald-600/60 hover:text-emerald-600 dark:hover:text-emerald-400 shadow-2xs"
@@ -623,7 +594,7 @@ export const FollowUpPlanner: React.FC = () => {
               </span>
             </Link>
 
-            {/* Lost Leads */}
+            {/* 4. Lost Leads */}
             <Link
               to="/crm/lost-leads"
               className="group relative flex items-center justify-between p-2.5 sm:px-3 sm:py-2.5 rounded-xl text-xs font-bold transition-all duration-200 border cursor-pointer bg-slate-50/70 hover:bg-white dark:bg-dark-800/60 dark:hover:bg-dark-750 text-slate-700 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 hover:border-rose-400/60 dark:hover:border-rose-600/60 hover:text-rose-600 dark:hover:text-rose-400 shadow-2xs"
@@ -638,7 +609,7 @@ export const FollowUpPlanner: React.FC = () => {
             </Link>
           </div>
 
-          {/* Row 2: Follow-Up Sub-Pipeline Filter Strip */}
+          {/* Row 2: Follow-Up Sub-Pipeline Filter Strip (Only 2 sub pipelines: Pending and Upcoming) */}
           <div className="pt-2 border-t border-slate-100 dark:border-dark-800/80">
             <div className="bg-slate-50/80 dark:bg-dark-950/70 rounded-xl p-2 sm:p-2.5 border border-slate-200/70 dark:border-dark-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
               <div className="flex items-center space-x-2 shrink-0">
@@ -651,104 +622,54 @@ export const FollowUpPlanner: React.FC = () => {
               </div>
 
               <div className="w-full">
-                <div className="w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                <div className="w-full grid grid-cols-2 gap-2 sm:gap-3">
+                  {/* Subpipeline 1: Pending */}
                   <button
                     type="button"
-                    onClick={() => { setChannelFilter('all'); setPeriodFilter('all'); setStatusFilter('all'); }}
-                    className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                      channelFilter === 'all' && periodFilter === 'all' && statusFilter === 'all'
+                    onClick={() => {
+                      setSubPipeline('pending');
+                      setPeriodFilter('pending');
+                      setStatusFilter('pending');
+                    }}
+                    className={`flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                      subPipeline === 'pending'
                         ? 'btn-blue-45 text-white shadow-xs ring-1 ring-blue-400/30'
                         : 'bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 hover:border-blue-400/60'
                     }`}
                   >
-                    <div className="flex items-center space-x-1.5 truncate">
-                      <Clock className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate">All Follow-ups</span>
+                    <div className="flex items-center space-x-2 truncate">
+                      <Clock className="h-4 w-4 shrink-0" />
+                      <span className="truncate">Pending</span>
                     </div>
-                    <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                      channelFilter === 'all' && periodFilter === 'all' && statusFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
+                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
+                      subPipeline === 'pending' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
                     }`}>
-                      {stats.total}
+                      {stats.pending ?? 0}
                     </span>
                   </button>
 
+                  {/* Subpipeline 2: Upcoming */}
                   <button
                     type="button"
-                    onClick={() => { setPeriodFilter('today'); setChannelFilter('all'); setStatusFilter('all'); }}
-                    className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                      periodFilter === 'today'
+                    onClick={() => {
+                      setSubPipeline('upcoming');
+                      setPeriodFilter('upcoming');
+                      setStatusFilter('pending');
+                    }}
+                    className={`flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                      subPipeline === 'upcoming'
                         ? 'bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-xs ring-1 ring-amber-400/30'
                         : 'bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 hover:border-amber-400/60'
                     }`}
                   >
-                    <div className="flex items-center space-x-1.5 truncate">
-                      <Zap className="h-3.5 w-3.5 shrink-0 fill-current" />
-                      <span className="truncate">Today Due</span>
+                    <div className="flex items-center space-x-2 truncate">
+                      <Calendar className="h-4 w-4 shrink-0" />
+                      <span className="truncate">Upcoming</span>
                     </div>
-                    <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                      periodFilter === 'today' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
+                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
+                      subPipeline === 'upcoming' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
                     }`}>
-                      {stats.todayDue}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => { setStatusFilter('pending'); setPeriodFilter('all'); setChannelFilter('all'); }}
-                    className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                      statusFilter === 'pending'
-                        ? 'btn-blue-45 text-white shadow-xs ring-1 ring-blue-400/30'
-                        : 'bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 hover:border-blue-400/60'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-1.5 truncate">
-                      <Clock className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate">Pending</span>
-                    </div>
-                    <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                      statusFilter === 'pending' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
-                    }`}>
-                      {stats.pending}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => { setPeriodFilter('overdue'); setChannelFilter('all'); setStatusFilter('all'); }}
-                    className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                      periodFilter === 'overdue'
-                        ? 'bg-gradient-to-br from-rose-500 to-rose-700 text-white shadow-xs ring-1 ring-rose-400/30'
-                        : 'bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 hover:border-rose-400/60'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-1.5 truncate">
-                      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate">Overdue</span>
-                    </div>
-                    <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                      periodFilter === 'overdue' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
-                    }`}>
-                      {stats.overdue}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => { setStatusFilter('completed'); setPeriodFilter('all'); setChannelFilter('all'); }}
-                    className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                      statusFilter === 'completed'
-                        ? 'btn-green-45 text-white shadow-xs ring-1 ring-emerald-400/30'
-                        : 'bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 hover:border-emerald-400/60'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-1.5 truncate">
-                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate">Completed</span>
-                    </div>
-                    <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                      statusFilter === 'completed' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
-                    }`}>
-                      {stats.completed}
+                      {stats.upcoming ?? 0}
                     </span>
                   </button>
                 </div>
@@ -796,13 +717,30 @@ export const FollowUpPlanner: React.FC = () => {
 
             <select
               value={periodFilter}
-              onChange={(e) => setPeriodFilter(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setPeriodFilter(val);
+                if (val === 'upcoming') {
+                  setSubPipeline('upcoming');
+                } else if (val === 'pending' || val === 'today' || val === 'overdue') {
+                  setSubPipeline('pending');
+                }
+              }}
               className="px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-dark-800 border border-slate-200/80 dark:border-dark-700 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none cursor-pointer"
             >
-              <option value="all">📅 All Dates</option>
-              <option value="today">⚡ Today's Due</option>
-              <option value="upcoming">⏳ Upcoming</option>
-              <option value="overdue">⚠️ Overdue</option>
+              {subPipeline === 'pending' ? (
+                <>
+                  <option value="pending">⏳ All Pending (Due & Overdue)</option>
+                  <option value="today">⚡ Today Due Only</option>
+                  <option value="overdue">⚠️ Overdue Only</option>
+                  <option value="all">📅 All Dates</option>
+                </>
+              ) : (
+                <>
+                  <option value="upcoming">⏳ All Upcoming (Future)</option>
+                  <option value="all">📅 All Dates</option>
+                </>
+              )}
             </select>
 
             <button

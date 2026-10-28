@@ -4,7 +4,7 @@ import { api } from '../../services/api';
 import {
   Smartphone,
   Activity, PhoneCall, PhoneIncoming, PhoneOutgoing,
-  RefreshCw, Users, User as UserIcon, Search,
+  RefreshCw, Users, Search,
   Clock, X, Download
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -31,7 +31,9 @@ export const MobileSyncHub: React.FC = () => {
     const currentOrg = state.organizations.find(o => o.id === currentOrgId);
     return currentOrg?.role || 'Sale Executive';
   });
-  const isPrivileged = ['Admin', 'Super Admin', 'Manager', 'Team Leader'].includes(userRole);
+  const currentUser = useAuthStore((state) => state.user);
+  const currentUserId = currentUser?.id;
+  const isPrivileged = ['Admin', 'Super Admin', 'Manager'].includes(userRole) || ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(currentUser?.email || '');
 
   // Filters State
   const [selectedEmployee, setSelectedEmployee] = useState('');
@@ -73,7 +75,7 @@ export const MobileSyncHub: React.FC = () => {
   const callCountMap = useMemo(() => {
     const map = new Map<string, number>();
     rawLogs.forEach((log) => {
-      const key = log.leadId?._id || log.leadId?.id || log.customerId?._id || log.customerId?.id || (log.channelDetails?.phoneNumber || '').trim().replace(/\D/g, '');
+      const key = log.leadId?._id || log.leadId?.id || log.customerId?._id || log.customerId?.id || (log.channelDetails?.phoneNumber || log.phoneNumber || '').trim().replace(/\D/g, '') || log._id || log.id;
       if (key) {
         map.set(key, (map.get(key) || 0) + 1);
       }
@@ -84,19 +86,14 @@ export const MobileSyncHub: React.FC = () => {
   // Client-side quick search & outcome filtering with latestOnly deduplication
   const filteredLogs = useMemo(() => {
     const matched = rawLogs.filter((log) => {
-      // Exclude unlinked leads/calls (must be linked to an existing Lead or Customer)
-      if (!log.leadId && !log.customerId) {
-        return false;
-      }
-
       // Search query (phone, lead name, contact name, sales rep name)
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
-        const phone = (log.channelDetails?.phoneNumber || '').toLowerCase();
+        const phone = (log.channelDetails?.phoneNumber || log.phoneNumber || '').toLowerCase();
         const leadName = (log.leadId?.name || '').toLowerCase();
         const leadCode = (log.leadId?.leadId || '').toLowerCase();
         const customerName = (log.customerId?.name || '').toLowerCase();
-        const repName = log.assignedTo ? `${log.assignedTo.firstName} ${log.assignedTo.lastName}`.toLowerCase() : '';
+        const repName = log.assignedTo ? `${log.assignedTo.firstName || ''} ${log.assignedTo.lastName || ''}`.toLowerCase() : '';
         const notes = (log.notes || '').toLowerCase();
 
         const matches = phone.includes(q) ||
@@ -111,22 +108,28 @@ export const MobileSyncHub: React.FC = () => {
 
       // Outcome Filter
       if (outcomeFilter !== 'ALL') {
-        if (outcomeFilter === 'Connected' && log.outcome !== 'Connected') return false;
-        if (outcomeFilter === 'No Answer' && log.outcome !== 'No Answer') return false;
-        if (outcomeFilter === 'Missed' && !['Missed / Rejected', 'Missed', 'Rejected'].includes(log.outcome)) return false;
+        const out = log.outcome || '';
+        const dur = Number(log.channelDetails?.callDuration) || 0;
+        if (outcomeFilter === 'Connected') {
+          if (!['Connected', 'Interested', 'Converted', 'Call Back Later'].includes(out) && dur <= 0) return false;
+        } else if (outcomeFilter === 'No Answer') {
+          if (out !== 'No Answer') return false;
+        } else if (outcomeFilter === 'Missed') {
+          if (!['Missed / Rejected', 'Missed', 'Rejected', 'Busy'].includes(out)) return false;
+        }
       }
 
       return true;
     });
 
     // Ensure sorted by date descending (most recent first)
-    matched.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    matched.sort((a, b) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime());
 
     // When latestOnly is active (default), show only the latest call log per lead/customer/number
     if (latestOnly) {
       const seen = new Set<string>();
       return matched.filter((log) => {
-        const key = log.leadId?._id || log.leadId?.id || log.customerId?._id || log.customerId?.id || (log.channelDetails?.phoneNumber || '').trim().replace(/\D/g, '') || log._id;
+        const key = log.leadId?._id || log.leadId?.id || log.customerId?._id || log.customerId?.id || (log.channelDetails?.phoneNumber || log.phoneNumber || '').trim().replace(/\D/g, '') || log._id || log.id;
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
@@ -161,9 +164,16 @@ export const MobileSyncHub: React.FC = () => {
 
   // Selected Employee display name
   const selectedRepObj = useMemo(() => {
-    if (!selectedEmployee || !repsData) return null;
+    if (!selectedEmployee) return null;
+    if (selectedEmployee === currentUserId) {
+      return {
+        user: currentUser,
+        role: userRole
+      };
+    }
+    if (!repsData) return null;
     return repsData.find((r: any) => (r.user?._id || r.user?.id) === selectedEmployee);
-  }, [selectedEmployee, repsData]);
+  }, [selectedEmployee, repsData, currentUserId, currentUser, userRole]);
 
   const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
   const apkDownloadUrl = '/api/download/apk';
@@ -286,11 +296,6 @@ export const MobileSyncHub: React.FC = () => {
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
-              {latestOnly
-                ? 'Showing only the latest call log per contact/lead.'
-                : 'Real-time feed of all mobile SIM calls synchronized by sales representatives.'}
-            </p>
           </div>
 
           {/* Quick Metrics Badges & Latest Only Toggle */}
@@ -317,7 +322,7 @@ export const MobileSyncHub: React.FC = () => {
                   }`}
                 title="Show all historical call logs"
               >
-                All History ({rawLogs.filter((l: any) => l.leadId || l.customerId).length})
+                All History ({rawLogs.length})
               </button>
             </div>
 
@@ -344,40 +349,49 @@ export const MobileSyncHub: React.FC = () => {
         {/* Filter Controls Bar (Employee Filter, Search, Outcome Filter) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-dark-800/60 border border-slate-200/60 dark:border-dark-700/60">
 
-          {/* Employee Selector (Admins / Managers) */}
-          {isPrivileged ? (
-            <div className="sm:col-span-2 lg:col-span-5 flex items-center space-x-2">
-              <div className="p-2 rounded-xl bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-700 text-slate-500 dark:text-dark-300">
-                <Users className="h-4 w-4 text-primary-600 dark:text-primary-400" />
-              </div>
-              <div className="flex-1 min-w-0">
+          {/* Employee Selector for all team members & executives */}
+          <div className="sm:col-span-2 lg:col-span-5 flex items-center space-x-2">
+            <div className="p-2 rounded-xl bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-700 text-slate-500 dark:text-dark-300">
+              <Users className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              {isPrivileged ? (
                 <select
                   value={selectedEmployee}
                   onChange={(e) => setSelectedEmployee(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-dark-700 bg-white dark:bg-dark-900 text-xs font-bold text-slate-800 dark:text-white outline-none cursor-pointer focus:ring-2 focus:ring-primary-500/20"
                 >
-                  <option value="">👤 All Employees & Sales Reps</option>
-                  {(repsData || []).map((rep: any) => {
-                    const u = rep.user;
-                    if (!u) return null;
-                    const repId = u._id || u.id;
-                    const name = `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email;
-                    const roleLabel = rep.role ? `[${rep.role}]` : '';
-                    return (
-                      <option key={repId} value={repId}>
-                        {name} {roleLabel} ({u.email})
-                      </option>
-                    );
-                  })}
+                  <option value="">🌐 All Organization Calls (Entire Team History)</option>
+                  {currentUserId && (
+                    <option value={currentUserId}>
+                      👤 My Calls Only ({currentUser?.firstName || 'Me'} {currentUser?.lastName || ''})
+                    </option>
+                  )}
+                  {(repsData || [])
+                    .filter((rep: any) => (rep.user?._id || rep.user?.id) !== currentUserId)
+                    .map((rep: any) => {
+                      const u = rep.user;
+                      if (!u) return null;
+                      const repId = u._id || u.id;
+                      const name = `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email;
+                      const roleLabel = rep.role ? `[${rep.role}]` : '';
+                      return (
+                        <option key={repId} value={repId}>
+                          {name} {roleLabel} ({u.email})
+                        </option>
+                      );
+                    })}
                 </select>
-              </div>
+              ) : (
+                <div className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-dark-700 bg-white dark:bg-dark-900 text-xs font-bold text-slate-800 dark:text-white flex items-center justify-between shadow-2xs">
+                  <span>👤 My Assigned Leads Calls ({currentUser?.firstName || 'Me'} {currentUser?.lastName || ''})</span>
+                  <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200/60 dark:border-emerald-800/60">
+                    Assigned Only
+                  </span>
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="sm:col-span-2 lg:col-span-5 flex items-center space-x-2 text-xs font-bold text-slate-600 dark:text-dark-300 px-2">
-              <UserIcon className="h-4 w-4 text-primary-600" />
-              <span>Viewing My SIM Call History</span>
-            </div>
-          )}
+          </div>
 
           {/* Quick Search */}
           <div className="sm:col-span-1 lg:col-span-4 relative">
@@ -506,7 +520,7 @@ export const MobileSyncHub: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-dark-800">
                 {filteredLogs.map((log: any) => (
-                  <tr key={log._id} className="hover:bg-slate-50/50 dark:hover:bg-dark-800/30 transition">
+                  <tr key={log._id || log.id} className="hover:bg-slate-50/50 dark:hover:bg-dark-800/30 transition">
                     <td className="p-3">
                       <div className="flex items-center space-x-1.5">
                         {log.channelDetails?.callType === 'INCOMING' ? (
@@ -533,15 +547,15 @@ export const MobileSyncHub: React.FC = () => {
                         <span className="w-5 h-5 rounded-full bg-primary-100 dark:bg-primary-950/60 text-primary-600 font-black text-[9px] flex items-center justify-center">
                           {log.assignedTo?.firstName ? log.assignedTo.firstName[0].toUpperCase() : 'A'}
                         </span>
-                        <span>{log.assignedTo ? `${log.assignedTo.firstName} ${log.assignedTo.lastName}` : 'Agent'}</span>
+                        <span>{log.assignedTo?.firstName ? `${log.assignedTo.firstName} ${log.assignedTo.lastName || ''}`.trim() : 'Sales Agent'}</span>
                       </div>
                     </td>
 
                     <td className="p-3">
                       <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
                         {log.leadId ? (
-                          <Link to={`/crm/leads/${log.leadId._id}`} className="font-bold text-primary-600 hover:underline">
-                            {log.leadId.name} <span className="text-[10px] font-mono text-slate-400">({log.leadId.leadId})</span>
+                          <Link to={`/crm/leads/${log.leadId._id || log.leadId.id}`} className="font-bold text-primary-600 hover:underline">
+                            {log.leadId.name} {log.leadId.leadId && <span className="text-[10px] font-mono text-slate-400">({log.leadId.leadId})</span>}
                           </Link>
                         ) : log.customerId ? (
                           <span className="font-bold text-purple-600">{log.customerId.name} (Customer)</span>
@@ -549,7 +563,7 @@ export const MobileSyncHub: React.FC = () => {
                           <span className="text-slate-400 font-medium">Unlinked Lead</span>
                         )}
                         {latestOnly && (() => {
-                          const key = log.leadId?._id || log.leadId?.id || log.customerId?._id || log.customerId?.id || (log.channelDetails?.phoneNumber || '').trim().replace(/\D/g, '');
+                          const key = log.leadId?._id || log.leadId?.id || log.customerId?._id || log.customerId?.id || (log.channelDetails?.phoneNumber || log.phoneNumber || '').trim().replace(/\D/g, '') || log._id || log.id;
                           const count = key ? callCountMap.get(key) || 1 : 1;
                           if (count > 1) {
                             return (
@@ -567,7 +581,7 @@ export const MobileSyncHub: React.FC = () => {
                     </td>
 
                     <td className="p-3 font-mono font-medium">
-                      {log.channelDetails?.phoneNumber || '—'}
+                      {log.channelDetails?.phoneNumber || log.phoneNumber || '—'}
                     </td>
 
                     <td className="p-3 font-bold text-slate-800 dark:text-white">
@@ -575,8 +589,8 @@ export const MobileSyncHub: React.FC = () => {
                     </td>
 
                     <td className="p-3">
-                      <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${log.outcome === 'Connected' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' :
-                        log.outcome === 'Missed / Rejected' ? 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400' :
+                      <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${['Connected', 'Interested', 'Converted'].includes(log.outcome) ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' :
+                        ['Missed / Rejected', 'Missed', 'Rejected', 'Busy'].includes(log.outcome) ? 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400' :
                           'bg-slate-100 text-slate-600 dark:bg-dark-800 dark:text-dark-400'
                         }`}>
                         {log.outcome || 'Logged'}
@@ -590,7 +604,7 @@ export const MobileSyncHub: React.FC = () => {
                     </td>
 
                     <td className="p-3 text-[11px] text-slate-400 whitespace-nowrap">
-                      {new Date(log.date).toLocaleString('en-IN')}
+                      {new Date(log.date || log.createdAt).toLocaleString('en-IN')}
                     </td>
                   </tr>
                 ))}

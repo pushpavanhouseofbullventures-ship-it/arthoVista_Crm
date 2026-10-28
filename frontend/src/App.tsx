@@ -56,6 +56,26 @@ const queryClient = new QueryClient({
   }
 });
 
+import { useAuthStore } from './store/authStore';
+
+// Access guard that completely blocks sale employees from accessing invoices
+const InvoiceAccessGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, organizations, activeOrganizationId } = useAuthStore();
+  const activeOrg = organizations.find(org => org.id === activeOrganizationId) || organizations[0];
+  const activeRole = activeOrg?.role || (['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '') ? 'Admin' : 'Sale Executive');
+  const isAdmin = ['Admin', 'Super Admin'].includes(activeRole) || ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '');
+  const isManager = isAdmin || activeRole === 'Manager';
+  const isFinance = activeRole === 'Finance' || activeRole?.toLowerCase().includes('finance');
+  const isOperation = ['Operation', 'Operations'].includes(activeRole) || activeRole?.toLowerCase().includes('operat');
+  const isSaleEmployee = activeRole === 'Sale Executive' || activeRole === 'Sales Executive' || activeRole === 'Employee';
+  const hasInvoiceAccess = !isSaleEmployee && (isAdmin || isManager || isFinance || isOperation);
+
+  if (!hasInvoiceAccess) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <>{children}</>;
+};
+
 const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
@@ -101,9 +121,9 @@ const App: React.FC = () => {
               <Route path="/accounting/quotations/:id" element={<QuotationBuilder />} />
               <Route path="/crm/ot-pipeline" element={<OTPipeline />} />
               <Route path="/accounting/ot-pipeline" element={<OTPipeline />} />
-              <Route path="/accounting/invoices" element={<InvoicesList />} />
-              <Route path="/accounting/invoices/new" element={<InvoiceForm />} />
-              <Route path="/accounting/invoices/:id" element={<InvoiceDetail />} />
+              <Route path="/accounting/invoices" element={<InvoiceAccessGuard><InvoicesList /></InvoiceAccessGuard>} />
+              <Route path="/accounting/invoices/new" element={<InvoiceAccessGuard><InvoiceForm /></InvoiceAccessGuard>} />
+              <Route path="/accounting/invoices/:id" element={<InvoiceAccessGuard><InvoiceDetail /></InvoiceAccessGuard>} />
 
               {/* 4. Admin Assignment & Integrations Panel */}
               <Route path="/admin/assignment" element={<AdminAssignment />} />

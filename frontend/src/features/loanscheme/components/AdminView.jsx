@@ -19,8 +19,8 @@ export default function Admin({
   const { user, organizations, activeOrganizationId } = useAuthStore();
 
   const activeOrg = organizations.find((org) => org.id === activeOrganizationId) || organizations[0];
-  const activeRole = activeOrg?.role || (user?.email === 'shivamthakur12012@gmail.com' ? 'Admin' : 'Sale Executive');
-  const isCrmAdmin = ['Admin', 'Super Admin'].includes(activeRole) || user?.email === 'shivamthakur12012@gmail.com';
+  const activeRole = activeOrg?.role || (['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '') ? 'Admin' : 'Sale Executive');
+  const isCrmAdmin = ['Admin', 'Super Admin'].includes(activeRole) || ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '');
 
   const hasFullAdminAccess = isCrmAdmin || isSuperAdmin;
 
@@ -326,12 +326,12 @@ export default function Admin({
         <div className="modal-backdrop" onClick={() => setShowPasscodeModal(false)}>
           <div className="modal-content simple-passcode-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>👑 Enter Super Admin Passcode</h3>
+              <h3>👑 Enter Admin Passcode</h3>
               <button className="modal-close" onClick={() => setShowPasscodeModal(false)}>✕</button>
             </div>
             <div className="modal-body">
               <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 14px 0' }}>
-                Only Super Admins can add, edit, or delete schemes. Enter the Super Admin passcode (<strong>admin123</strong>) to proceed:
+                Only Admins can add, edit, or delete schemes. Enter the Admin passcode (<strong>admin123</strong>) to proceed:
               </p>
               <form onSubmit={handlePasscodeSubmit}>
                 <input
@@ -348,7 +348,7 @@ export default function Admin({
                     Cancel
                   </button>
                   <button type="submit" className="pill-btn btn-danger-gradient">
-                    Unlock Super Admin
+                    Unlock Admin
                   </button>
                 </div>
               </form>

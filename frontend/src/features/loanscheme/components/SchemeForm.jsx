@@ -105,7 +105,7 @@ export default function SchemeForm({ editingScheme, onSave, onCancel, isSuperAdm
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!isSuperAdmin) {
-      alert('Permission Denied: Only Super Admin can save or update schemes.');
+      alert('Permission Denied: Only Admin can save or update schemes.');
       return;
     }
     if (!form.name.trim()) return;
@@ -147,7 +147,7 @@ export default function SchemeForm({ editingScheme, onSave, onCancel, isSuperAdm
           </div>
         </div>
         <div className="super-admin-shield-badge">
-          👑 Super Admin Author
+          👑 Admin Author
         </div>
       </div>
 

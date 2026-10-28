@@ -13,8 +13,8 @@ export const HRManagement: React.FC = () => {
   const queryClient = useQueryClient();
   const { user, organizations, activeOrganizationId } = useAuthStore();
   const activeOrg = organizations.find(org => org.id === activeOrganizationId) || organizations[0];
-  const currentRole = activeOrg?.role || (user?.email === 'shivamthakur12012@gmail.com' ? 'Admin' : 'Sale Executive');
-  const isAdmin = ['Super Admin', 'Admin'].includes(currentRole) || user?.email === 'shivamthakur12012@gmail.com';
+  const currentRole = activeOrg?.role || (['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '') ? 'Admin' : 'Sale Executive');
+  const isAdmin = ['Super Admin', 'Admin'].includes(currentRole) || ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '');
   const isManager = isAdmin || currentRole === 'Manager';
   const isHR =
     ['HR', 'HR Executive', 'HR Caller', 'HR Specialist', 'HR Manager'].includes(currentRole) ||

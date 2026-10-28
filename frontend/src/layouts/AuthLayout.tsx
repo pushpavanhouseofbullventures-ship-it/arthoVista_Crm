@@ -33,7 +33,7 @@ export const AuthLayout: React.FC = () => {
         {/* 45-Degree Brand Glow Orbs */}
         <div className="absolute -top-24 -left-24 w-80 h-80 rounded-full bg-[#fe7c02]/25 blur-3xl pointer-events-none"></div>
         <div className="absolute -bottom-24 -right-24 w-80 h-80 rounded-full bg-[#028825]/25 blur-3xl pointer-events-none"></div>
-        
+
         {/* Logo */}
         <div className="z-10 flex items-center space-x-3.5">
           <div className="w-14 h-14 flex-shrink-0 flex items-center justify-center">
@@ -45,7 +45,7 @@ export const AuthLayout: React.FC = () => {
           </div>
           <div className="flex flex-col">
             <div className="flex items-center space-x-2">
-              <span className="font-bold text-2xl tracking-tight leading-tight text-white">Artho Vista</span>
+              <span className="font-bold text-2xl tracking-tight leading-tight text-white">ArthoVista</span>
               <span className="text-[10px] font-black bg-orange-500/30 text-orange-200 px-1.5 py-0.5 rounded border border-orange-400/50">CRM</span>
             </div>
             <span className="text-xs font-semibold text-emerald-300 tracking-wide mt-0.5">सपनों से समृद्धि तक</span>
@@ -57,16 +57,13 @@ export const AuthLayout: React.FC = () => {
           <h1 className="text-4xl font-extrabold leading-tight tracking-tight">
             The Operating System for Modern Indian Businesses.
           </h1>
-          <p className="text-primary-100 text-lg leading-relaxed font-light">
-            Manage your sales pipeline, deals, payments, GST invoices, and service workflows inside a secure, permission-aware environment.
-          </p>
           <div className="flex items-center space-x-4 pt-4">
             <div className="flex -space-x-2">
               <div className="w-8 h-8 rounded-full bg-white/20 border border-white/40 flex items-center justify-center text-xs font-bold">1</div>
               <div className="w-8 h-8 rounded-full bg-white/20 border border-white/40 flex items-center justify-center text-xs font-bold">2</div>
               <div className="w-8 h-8 rounded-full bg-white/20 border border-white/40 flex items-center justify-center text-xs font-bold">3</div>
             </div>
-            <span className="text-sm text-primary-200">Trusted by over 100+ professional consultancy teams.</span>
+            <span className="text-sm text-primary-200">Trusted by over 50+ professional consultancy teams.</span>
           </div>
         </div>
 

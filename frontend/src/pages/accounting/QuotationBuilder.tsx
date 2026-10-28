@@ -7,6 +7,7 @@ import {
   Send, Printer, RefreshCw, Eye, Edit3,
   Check
 } from 'lucide-react';
+import { DocumentWatermark } from '../../components/DocumentWatermark';
 
 interface LineItem {
   itemId?: string;
@@ -22,29 +23,7 @@ interface LineItem {
   total: number;
 }
 
-// Convert amount to Indian Rupees in words
-function numberToWordsINR(num: number): string {
-  if (!num || isNaN(num)) return 'Zero Rupees Only';
-  const a = [
-    '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
-    'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'
-  ];
-  const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
 
-  const inWords = (n: number): string => {
-    if (n === 0) return '';
-    if (n < 20) return a[n] + ' ';
-    if (n < 100) return b[Math.floor(n / 10)] + (n % 10 !== 0 ? ' ' + a[n % 10] : '') + ' ';
-    if (n < 1000) return a[Math.floor(n / 100)] + ' Hundred ' + (n % 100 !== 0 ? inWords(n % 100) : '');
-    if (n < 100000) return inWords(Math.floor(n / 1000)) + 'Thousand ' + (n % 1000 !== 0 ? inWords(n % 1000) : '');
-    if (n < 10000000) return inWords(Math.floor(n / 100000)) + 'Lakh ' + (n % 100000 !== 0 ? inWords(n % 100000) : '');
-    return inWords(Math.floor(n / 10000000)) + 'Crore ' + (n % 10000000 !== 0 ? inWords(n % 10000000) : '');
-  };
-
-  const whole = Math.floor(num);
-  const words = inWords(whole).trim();
-  return words ? `Rupees ${words} Only` : 'Zero Rupees Only';
-}
 
 export const QuotationBuilder: React.FC = () => {
   const { id } = useParams();
@@ -58,27 +37,60 @@ export const QuotationBuilder: React.FC = () => {
 
   const [leadId, setLeadId] = useState<string>(leadIdParam || '');
   const [customerId, setCustomerId] = useState<string>('');
+  const [customClientCompany, setCustomClientCompany] = useState<string>('ABC Technologies Pvt. Ltd.');
+  const [customContactName, setCustomContactName] = useState<string>('Rahul Sharma');
+  const [customLocation, setCustomLocation] = useState<string>('Noida, Uttar Pradesh');
+  const [introNote, setIntroNote] = useState<string>(
+    'Thank you for considering Artho Vista. Please find our proposed services and commercial details below.'
+  );
+  const [paymentTerms, setPaymentTerms] = useState<string>(
+    '50% advance; remaining 50% on completion of agreed deliverables.'
+  );
   const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [validUntil, setValidUntil] = useState<string>(
-    new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   );
   const [items, setItems] = useState<LineItem[]>([
     {
-      name: 'Real Estate & Financial Advisory Services',
-      description: 'Comprehensive property asset advisory, valuation, and transaction consulting setup.',
+      name: 'DPIIT Startup Recognition',
+      description: 'Application and documentation assistance',
       quantity: 1,
-      rate: 15000,
+      rate: 8000,
       discountPercent: 0,
       discountAmount: 0,
       gstRate: 18,
-      taxAmount: 2700,
-      subtotal: 15000,
-      total: 17700
+      taxAmount: 1440,
+      subtotal: 8000,
+      total: 8000
+    },
+    {
+      name: 'MSME Registration Assistance',
+      description: 'Udyam registration support',
+      quantity: 1,
+      rate: 2000,
+      discountPercent: 0,
+      discountAmount: 0,
+      gstRate: 18,
+      taxAmount: 360,
+      subtotal: 2000,
+      total: 2000
+    },
+    {
+      name: 'Business Advisory',
+      description: 'Initial consulting package',
+      quantity: 1,
+      rate: 5000,
+      discountPercent: 0,
+      discountAmount: 0,
+      gstRate: 18,
+      taxAmount: 900,
+      subtotal: 5000,
+      total: 5000
     }
   ]);
   const [notes, setNotes] = useState('Thank you for considering our services. We look forward to a successful and long-term partnership.');
   const [termsAndConditions, setTermsAndConditions] = useState(
-    '1. Quotation is valid for 30 days from the date of issuance.\n2. 50% advance upon contract signing / token confirmation, balance upon final settlement.\n3. All statutory GST charges apply as per government regulations.\n4. Upon acceptance, this quotation can be directly converted into an official Tax Invoice.'
+    '1. Government fees, if applicable, are charged separately unless specified.\n2. Timelines depend on document submission and authority processing.\n3. Service starts upon acceptance and agreed payment.'
   );
 
   // Fetch Existing Quotation if Edit
@@ -115,7 +127,23 @@ export const QuotationBuilder: React.FC = () => {
       if (existingQuotation.items && Array.isArray(existingQuotation.items) && existingQuotation.items.length > 0) {
         setItems(existingQuotation.items);
       }
-      if (existingQuotation.notes) setNotes(existingQuotation.notes);
+      if (existingQuotation.notes) {
+        try {
+          const parsed = JSON.parse(existingQuotation.notes);
+          if (parsed && typeof parsed === 'object') {
+            if (parsed.introNote) setIntroNote(parsed.introNote);
+            if (parsed.paymentTerms) setPaymentTerms(parsed.paymentTerms);
+            if (parsed.customClientCompany) setCustomClientCompany(parsed.customClientCompany);
+            if (parsed.customContactName) setCustomContactName(parsed.customContactName);
+            if (parsed.customLocation) setCustomLocation(parsed.customLocation);
+            if (parsed.generalNote) setNotes(parsed.generalNote);
+          } else {
+            setNotes(existingQuotation.notes);
+          }
+        } catch {
+          setNotes(existingQuotation.notes);
+        }
+      }
       if (existingQuotation.termsAndConditions) setTermsAndConditions(existingQuotation.termsAndConditions);
     }
   }, [existingQuotation]);
@@ -184,7 +212,24 @@ export const QuotationBuilder: React.FC = () => {
 
   // Resolved quotation number
   const resolvedQuotationNo = existingQuotation?.quotationId ||
-    (existingQuotation?.id ? `QT-${existingQuotation.id.substring(0, 8).toUpperCase()}` : 'QT-DRAFT');
+    (existingQuotation?.id ? `AV-QT-${existingQuotation.id.substring(0, 8).toUpperCase()}` : 'AV-QT-2026-001');
+
+  // Format date helper (e.g. 21 Oct 2026)
+  const formatDateDisplay = (dateStr: string) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+
+  // Resolved Client Presentation
+  const clientCompany = selectedLead?.company || customClientCompany || selectedLead?.name || 'ABC Technologies Pvt. Ltd.';
+  const clientContact = selectedLead?.name ? `Contact: ${selectedLead.name}` : (customContactName ? `Contact: ${customContactName}` : 'Contact: Rahul Sharma');
+  const clientLocation = selectedLead?.location || customLocation || 'Noida, Uttar Pradesh';
+
+  // Dynamic UPI Payment QR Link
+  const upiIntentUri = `upi://pay?pa=arthovista@okhdfcbank&pn=Artho%20Vista&am=${grandTotal}&cu=INR&tn=${encodeURIComponent(resolvedQuotationNo)}`;
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(upiIntentUri)}`;
 
   // Save / Update Mutation
   const saveMutation = useMutation({
@@ -195,7 +240,14 @@ export const QuotationBuilder: React.FC = () => {
         date: date ? new Date(date).toISOString() : new Date().toISOString(),
         validUntil: validUntil ? new Date(validUntil).toISOString() : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         items,
-        notes,
+        notes: JSON.stringify({
+          introNote,
+          paymentTerms,
+          customClientCompany,
+          customContactName,
+          customLocation,
+          generalNote: notes
+        }),
         termsAndConditions
       };
 
@@ -384,371 +436,374 @@ export const QuotationBuilder: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. Main Executive Quotation Document Canvas (Dark Theme on Screen, Pure White on Print, Full A4 Height) */}
-      <div className="printable-document bg-white dark:bg-dark-900 text-slate-900 dark:text-white border border-slate-300 dark:border-dark-700 rounded-2xl p-6 md:p-8 shadow-sm flex flex-col justify-between min-h-[680px] print:min-h-[260mm] print:p-0 print:border-none print:shadow-none print:rounded-none print:bg-white print:text-black max-w-4xl mx-auto space-y-6">
+      {/* 2. Main Executive Quotation Document Canvas (Exact Artho Vista Official Layout) */}
+      <div className="printable-document bg-white text-slate-900 border border-slate-300 dark:border-dark-700 rounded-2xl shadow-xl max-w-4xl mx-auto overflow-hidden print:border-none print:shadow-none print:rounded-none print:p-0 print:m-0 print:max-w-full print:w-full">
 
-        {/* Top Content: Header, Client Info, Table */}
-        <div className="space-y-5">
-          {/* Document Header */}
-          <div className="flex items-start justify-between pb-4 border-b border-slate-200 dark:border-dark-700 print:border-slate-300">
-            {/* Company Brand */}
-            <div className="space-y-1">
-              <div className="flex items-center space-x-2.5">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#fe7c02] via-[#0062d1] to-[#028825] p-0.5 shadow-sm flex-shrink-0">
-                  <div className="w-full h-full bg-white dark:bg-dark-900 print:bg-white rounded-[8px] flex items-center justify-center p-0.5">
-                    <img src="/logo.png" alt="Artho Vista" className="w-full h-full object-contain" />
-                  </div>
-                </div>
-                <div>
-                  <div className="flex items-center space-x-1.5">
-                    <h2 className="text-xl font-bold text-slate-900 dark:text-white print:text-black leading-tight">
-                      Artho Vista
-                    </h2>
-                    <span className="text-[10px] font-black bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300 px-1 py-0.2 rounded border border-orange-300 print:hidden">
-                      CRM
-                    </span>
-                  </div>
-                  <span className="text-[11px] font-extrabold text-[#028825] dark:text-emerald-400 print:text-black">
-                    सपनों से समृद्धि तक
-                  </span>
-                </div>
-              </div>
-              <p className="text-xs text-slate-600 dark:text-slate-400 print:text-slate-800 font-medium">
-                B-Block, Sector 62, Noida, India &bull; contact@arthovista.com &bull; +91 98765 43210
-              </p>
-              <p className="text-xs font-bold text-slate-800 dark:text-slate-200 print:text-black">
-                GSTIN: 07AAAAA0000A1Z5
-              </p>
-            </div>
-
-            {/* Quotation Title & Ref */}
-            <div className="text-right space-y-0.5">
-              <h1 className="text-2xl font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 print:text-black">
-                QUOTATION
-              </h1>
-              <p className="text-sm font-mono font-bold text-slate-700 dark:text-slate-300 print:text-black">
-                #{resolvedQuotationNo}
-              </p>
-              <p className="text-xs text-slate-600 dark:text-slate-400 print:text-slate-800 pt-1">
-                Date: <span className="font-bold text-slate-900 dark:text-white print:text-black">{date}</span>
-              </p>
-              <p className="text-xs text-slate-600 dark:text-slate-400 print:text-slate-800">
-                Valid Until: <span className="font-bold text-amber-600 dark:text-amber-400 print:text-amber-800">{validUntil}</span>
-              </p>
-            </div>
-          </div>
-
-          {/* Client Details Section */}
-          <div className="pb-2">
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 print:text-slate-700 mb-1">
-              Quotation Prepared For:
+        {/* 1. Header Banner (Deep Navy Background #0f1d36) */}
+        <div
+          className="bg-[#0f1d36] text-white px-8 py-7 sm:px-10 sm:py-8 flex items-center justify-between"
+          style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}
+        >
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-wider text-white font-sans">
+              ArthoVista
+            </h1>
+            <p className="text-[9px] sm:text-[10px] font-bold tracking-[0.25em] text-slate-300 uppercase mt-1">
+              BUSINESS GROWTH MADE SIMPLE
             </p>
-
-            {viewMode === 'edit' && !isLocked ? (
-              <div className="mb-2">
-                <select
-                  value={leadId}
-                  onChange={(e) => setLeadId(e.target.value)}
-                  className="w-full max-w-md px-2.5 py-1.5 rounded border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-800 text-xs font-bold text-slate-900 dark:text-white outline-none"
-                >
-                  <option value="">-- Select Client / Lead --</option>
-                  {(leadsData || []).map((lead: any) => (
-                    <option key={lead._id || lead.id} value={lead._id || lead.id}>
-                      {lead.name} {lead.company ? `(${lead.company})` : ''} &bull; {lead.phone}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : null}
-
-            {selectedLead ? (
-              <div className="space-y-0.5">
-                <p className="font-bold text-base text-slate-900 dark:text-white print:text-black">
-                  {selectedLead.name || 'Valued Client'}
-                </p>
-                {selectedLead.company && (
-                  <p className="font-semibold text-xs text-slate-700 dark:text-slate-300 print:text-slate-800">
-                    {selectedLead.company}
-                  </p>
-                )}
-                <p className="text-xs text-slate-600 dark:text-slate-400 print:text-slate-800">
-                  {[selectedLead.phone, selectedLead.email].filter(Boolean).join(' • ')}
-                </p>
-                {selectedLead.location && (
-                  <p className="text-xs text-slate-600 dark:text-slate-400 print:text-slate-800">{selectedLead.location}</p>
-                )}
-              </div>
-            ) : (
-              <div className="text-xs text-slate-500 dark:text-slate-400 print:text-slate-700 italic">
-                {viewMode === 'edit' ? 'Select a client to automatically populate details.' : 'Direct Client / Walk-in Customer'}
-              </div>
-            )}
           </div>
-
-          {/* Itemized Line Items Table */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between no-print">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                Services & Line Items
-              </h3>
-              {viewMode === 'edit' && !isLocked && (
-                <button
-                  type="button"
-                  onClick={addItemRow}
-                  className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 font-bold text-xs hover:bg-blue-100 dark:hover:bg-blue-900/60 transition"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>Add Item Row</span>
-                </button>
-              )}
-            </div>
-
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-y-2 border-slate-300 dark:border-dark-700 print:border-slate-900 bg-slate-50/50 dark:bg-dark-800/50 print:bg-white text-xs uppercase font-bold text-slate-800 dark:text-slate-200 print:text-black">
-                  <th className="py-2.5 px-3 w-10 text-center">#</th>
-                  <th className="py-2.5 px-3">Description</th>
-                  <th className="py-2.5 px-3 w-16 text-center">Qty</th>
-                  <th className="py-2.5 px-3 w-28 text-right">Rate (₹)</th>
-                  {viewMode === 'edit' && !isLocked && (
-                    <>
-                      <th className="py-2.5 px-2 w-16 text-center no-print">Disc %</th>
-                      <th className="py-2.5 px-2 w-20 text-center no-print">GST %</th>
-                    </>
-                  )}
-                  <th className="py-2.5 px-3 w-32 text-right">Amount (₹)</th>
-                  {viewMode === 'edit' && !isLocked && <th className="py-2.5 px-2 w-8 no-print"></th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200 dark:divide-dark-800 print:divide-slate-200">
-                {items.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50/60 dark:hover:bg-dark-800/40 print:hover:bg-transparent">
-                    <td className="py-3 px-3 text-center text-slate-600 dark:text-slate-400 print:text-black font-medium">{idx + 1}</td>
-
-                    {/* Item Name & Description */}
-                    <td className="py-3 px-3 space-y-0.5">
-                      {viewMode === 'edit' && !isLocked ? (
-                        <>
-                          <input
-                            type="text"
-                            placeholder="Item name / service title..."
-                            value={item.name}
-                            onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
-                            className="w-full font-bold px-2 py-1 rounded border border-slate-300 dark:border-dark-700 bg-white dark:bg-dark-800 text-xs text-slate-900 dark:text-white outline-none"
-                          />
-                          <input
-                            type="text"
-                            placeholder="Detailed scope or deliverables..."
-                            value={item.description}
-                            onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
-                            className="w-full text-xs text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded border border-slate-200 dark:border-dark-800 bg-white dark:bg-dark-800 outline-none"
-                          />
-                        </>
-                      ) : (
-                        <div>
-                          <p className="font-bold text-slate-900 dark:text-white print:text-black text-sm">{item.name || 'Service Item'}</p>
-                          {item.description && (
-                            <p className="text-xs text-slate-600 dark:text-slate-400 print:text-slate-700 leading-snug mt-0.5">{item.description}</p>
-                          )}
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Quantity */}
-                    <td className="py-3 px-3 text-center">
-                      {viewMode === 'edit' && !isLocked ? (
-                        <input
-                          type="number"
-                          min="1"
-                          value={item.quantity}
-                          onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
-                          className="w-12 px-1.5 py-0.5 rounded border border-slate-300 dark:border-dark-700 bg-white dark:bg-dark-800 text-xs text-center font-bold text-slate-900 dark:text-white outline-none"
-                        />
-                      ) : (
-                        <span className="font-medium text-slate-800 dark:text-slate-200 print:text-black">{item.quantity}</span>
-                      )}
-                    </td>
-
-                    {/* Rate */}
-                    <td className="py-3 px-3 text-right">
-                      {viewMode === 'edit' && !isLocked ? (
-                        <input
-                          type="number"
-                          min="0"
-                          value={item.rate}
-                          onChange={(e) => handleItemChange(idx, 'rate', e.target.value)}
-                          className="w-24 px-1.5 py-0.5 rounded border border-slate-300 dark:border-dark-700 bg-white dark:bg-dark-800 text-xs text-right font-bold text-slate-900 dark:text-white outline-none"
-                        />
-                      ) : (
-                        <span className="font-mono text-slate-800 dark:text-slate-200 print:text-black">₹{Number(item.rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                      )}
-                    </td>
-
-                    {/* Discount (Edit Mode Only) */}
-                    {viewMode === 'edit' && !isLocked && (
-                      <td className="py-3 px-2 text-center no-print">
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          value={item.discountPercent}
-                          onChange={(e) => handleItemChange(idx, 'discountPercent', e.target.value)}
-                          className="w-12 px-1 py-0.5 rounded border border-slate-300 dark:border-dark-700 bg-white dark:bg-dark-800 text-xs text-center font-bold text-slate-900 dark:text-white outline-none"
-                        />
-                      </td>
-                    )}
-
-                    {/* GST Rate (Edit Mode Only) */}
-                    {viewMode === 'edit' && !isLocked && (
-                      <td className="py-3 px-2 text-center no-print">
-                        <select
-                          value={item.gstRate}
-                          onChange={(e) => handleItemChange(idx, 'gstRate', e.target.value)}
-                          className="px-1 py-0.5 rounded border border-slate-300 dark:border-dark-700 bg-white dark:bg-dark-800 text-xs font-bold text-slate-900 dark:text-white outline-none"
-                        >
-                          <option value="0">0%</option>
-                          <option value="18">18%</option>
-                        </select>
-                      </td>
-                    )}
-
-                    {/* Line Total */}
-                    <td className="py-3 px-3 text-right font-bold font-mono text-slate-900 dark:text-white print:text-black text-sm">
-                      ₹{Number(item.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </td>
-
-                    {/* Remove Action */}
-                    {viewMode === 'edit' && !isLocked && (
-                      <td className="py-3 px-2 text-center no-print">
-                        <button
-                          type="button"
-                          onClick={() => removeItemRow(idx)}
-                          className="text-slate-400 hover:text-red-600 p-0.5 transition"
-                          title="Remove item"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Full-Width Financial / Commercial Summary (Above Bank Settlement Details) */}
-          <div className="pt-2 border-t-2 border-slate-300 dark:border-dark-700 print:border-slate-900 w-full">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-50/70 dark:bg-dark-800/50 print:bg-white p-3.5 rounded-xl border border-slate-200 dark:border-dark-700 print:border-y print:border-x-0 print:border-slate-300 print:p-2">
-              {/* Amount in Words (Left) */}
-              <div className="space-y-1 max-w-md">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 print:text-black">
-                  Amount in Words
-                </p>
-                <p className="text-xs font-semibold text-slate-900 dark:text-white print:text-black italic leading-snug">
-                  {numberToWordsINR(grandTotal)}
-                </p>
-              </div>
-
-              {/* Numerical Breakdown (Right) */}
-              <div className="w-full md:w-80 space-y-1.5 text-xs">
-                <div className="flex justify-between text-slate-600 dark:text-slate-400 print:text-black">
-                  <span>Gross Subtotal:</span>
-                  <span className="font-bold font-mono text-slate-900 dark:text-white print:text-black">
-                    ₹{subtotalSum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-
-                {totalDiscountSum > 0 && (
-                  <div className="flex justify-between text-emerald-600 dark:text-emerald-400 print:text-emerald-800 font-semibold">
-                    <span>Discount Applied:</span>
-                    <span className="font-mono">
-                      -₹{totalDiscountSum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                )}
-
-                <div className="flex justify-between text-slate-600 dark:text-slate-400 print:text-black">
-                  <span>GST (Estimated Tax):</span>
-                  <span className="font-bold font-mono text-slate-900 dark:text-white print:text-black">
-                    ₹{taxTotalSum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-
-                <div className="border-t-2 border-slate-900 dark:border-dark-600 print:border-black pt-1.5 flex justify-between items-center text-sm font-bold text-slate-900 dark:text-white print:text-black">
-                  <span>Total Net Payable:</span>
-                  <span className="text-base font-mono font-black text-blue-600 dark:text-blue-400 print:text-black">
-                    ₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-              </div>
-            </div>
+          <div className="text-right">
+            <h2 className="text-2xl sm:text-3xl font-black tracking-wider text-white uppercase font-sans">
+              QUOTATION
+            </h2>
+            <p className="text-xs font-mono font-medium text-slate-300 mt-1 tracking-wide">
+              # {resolvedQuotationNo}
+            </p>
           </div>
         </div>
 
-        {/* Bottom Section: Bank Details, Terms & Conditions (Full Width) & Authorized Signatory */}
-        <div className="space-y-4 print-avoid-break mt-auto pt-4 border-t border-slate-200 dark:border-dark-700 print:border-slate-300">
-          {/* Bank Settlement Details (Full Width: 2 Lines) */}
-          <div className="space-y-1.5 text-xs w-full">
-            <p className="font-bold uppercase tracking-wider text-slate-900 dark:text-white print:text-black border-b border-slate-200 dark:border-dark-700 print:border-slate-300 pb-1">
-              Bank Settlement Details
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1">
-              {/* Line 1 */}
-              <p className="text-slate-700 dark:text-slate-300 print:text-black">
-                Bank Name: <span className="font-bold text-slate-900 dark:text-white print:text-black">HDFC Bank • Artho Vista Pvt Ltd</span>
-              </p>
-              <p className="text-slate-700 dark:text-slate-300 print:text-black">
-                UPI Handle: <span className="font-bold text-emerald-600 dark:text-emerald-400 print:text-emerald-800">arthovista@okhdfcbank</span>
-              </p>
-              {/* Line 2 */}
-              <p className="text-slate-700 dark:text-slate-300 print:text-black font-mono">
-                Account No: <span className="font-bold text-slate-900 dark:text-white print:text-black">50200084729104</span>
-              </p>
-              <p className="text-slate-700 dark:text-slate-300 print:text-black font-mono">
-                IFSC Code: <span className="font-bold text-slate-900 dark:text-white print:text-black">HDFC0001234</span>
-              </p>
-            </div>
-          </div>
+        {/* 2. Document Body */}
+        <div className="p-8 sm:p-10 bg-white text-slate-900 relative overflow-hidden">
+          {/* Executive Security & Brand Watermark */}
+          <DocumentWatermark
+            brandText="ARTHOVISTA"
+            subText="BUSINESS GROWTH MADE SIMPLE"
+            documentType="quotation"
+            status={currentStatus}
+          />
 
-          {/* Terms & Conditions (Full Width) & Authorized Signatory Row */}
-          <div className="space-y-3 pt-1 border-t border-slate-200 dark:border-dark-700 print:border-slate-300">
-            {/* Terms & Conditions (Full Width) */}
-            <div className="space-y-1 text-xs w-full">
-              <p className="font-bold uppercase tracking-wider text-slate-900 dark:text-white print:text-black border-b border-slate-200 dark:border-dark-700 print:border-slate-300 pb-1">
-                Terms & Conditions
-              </p>
-              {viewMode === 'edit' && !isLocked ? (
-                <textarea
-                  rows={2}
-                  value={termsAndConditions}
-                  onChange={(e) => setTermsAndConditions(e.target.value)}
-                  className="w-full p-1.5 rounded border border-slate-300 dark:border-dark-700 bg-white dark:bg-dark-800 text-xs text-slate-900 dark:text-white outline-none font-medium"
-                />
-              ) : (
-                <div className="text-slate-600 dark:text-slate-300 print:text-black whitespace-pre-line leading-relaxed text-xs">
-                  {termsAndConditions}
-                </div>
-              )}
-              {notes && (
-                <p className="text-slate-500 dark:text-slate-400 print:text-black italic pt-0.5 text-xs">
-                  Note: {notes}
+          <div className="relative z-10 space-y-6">
+            {/* Quotation To & Dates Section */}
+            <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+              <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-900">
+                  QUOTATION TO
                 </p>
-              )}
-            </div>
 
-            {/* Authorized Signatory Block (Bottom-Right Pinned) */}
-            <div className="flex justify-end items-end pt-2">
-              <div className="text-right space-y-1">
-                <p className="text-xs font-bold text-slate-900 dark:text-white print:text-black">
-                  ArthoVista Pvt. Ltd.
-                </p>
-                <div className="w-56 ml-auto pt-8 text-center">
-                  <div className="border-b-2 border-slate-900 dark:border-slate-400 print:border-black mb-1.5 w-full"></div>
-                  <p className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white print:text-black">
-                    AUTHORIZED SIGNATORY
+                {/* Edit Mode Custom Input Fields */}
+                {viewMode === 'edit' && !isLocked && (
+                  <div className="space-y-2 max-w-sm pt-1 pb-2 no-print">
+                    <select
+                      value={leadId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setLeadId(val);
+                        const lead = (leadsData || []).find((l: any) => (l._id || l.id) === val);
+                        if (lead) {
+                          setCustomClientCompany(lead.company || lead.name || '');
+                          setCustomContactName(lead.name || '');
+                          setCustomLocation(lead.location || lead.city || 'Noida, Uttar Pradesh');
+                        }
+                      }}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-xs text-slate-900 font-semibold outline-none focus:ring-2 focus:ring-blue-500/20"
+                    >
+                      <option value="" className="text-slate-500 bg-white">-- Link CRM Lead (Optional) --</option>
+                      {(leadsData || []).map((lead: any) => (
+                        <option key={lead._id || lead.id} value={lead._id || lead.id} className="text-slate-900 bg-white">
+                          {lead.name} {lead.company ? `(${lead.company})` : ''} • {lead.phone}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      placeholder="Company Name (e.g. ABC Technologies Pvt. Ltd.)"
+                      value={customClientCompany}
+                      onChange={(e) => setCustomClientCompany(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Contact Person (e.g. Rahul Sharma)"
+                      value={customContactName}
+                      onChange={(e) => setCustomContactName(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-medium text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Location (e.g. Noida, Uttar Pradesh)"
+                      value={customLocation}
+                      onChange={(e) => setCustomLocation(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-medium text-slate-800 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+                )}
+
+                {/* Rendered Client Details */}
+                <div>
+                  <p className="text-base font-bold text-slate-950">
+                    {clientCompany}
+                  </p>
+                  <p className="text-xs text-slate-700 mt-0.5">
+                    {clientContact}
+                  </p>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    {clientLocation}
                   </p>
                 </div>
               </div>
+
+              <div className="sm:text-right space-y-0.5">
+                <p className="text-xs text-slate-600">
+                  Date: <span className="font-semibold text-slate-900">{formatDateDisplay(date)}</span>
+                </p>
+                <p className="text-xs text-slate-600">
+                  Valid Until: <span className="font-semibold text-slate-900">{formatDateDisplay(validUntil)}</span>
+                </p>
+                <div className="pt-2">
+                  <span className="inline-block px-3 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-[#ebf8ee] text-[#1e7e34] border border-[#c3e6cb]">
+                    {currentStatus.toUpperCase()}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Service Quotation Intro */}
+            <div className="pt-2">
+              <h3 className="text-sm font-bold text-slate-900">Service Quotation</h3>
+              {viewMode === 'edit' && !isLocked ? (
+                <textarea
+                  rows={2}
+                  value={introNote}
+                  onChange={(e) => setIntroNote(e.target.value)}
+                  className="w-full p-2 mt-1 rounded-lg border border-slate-300 bg-white text-xs text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-500/20 no-print"
+                />
+              ) : null}
+              <p className="text-xs text-slate-700 leading-relaxed mt-0.5">
+                {introNote}
+              </p>
+            </div>
+
+            {/* 4. Line Items Table */}
+            <div className="pt-2">
+              <div className="flex items-center justify-between pb-1 no-print">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Services & Commercial Details</span>
+                {viewMode === 'edit' && !isLocked && (
+                  <button
+                    type="button"
+                    onClick={addItemRow}
+                    className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 font-bold text-xs hover:bg-blue-100 transition"
+                  >
+                    <Plus className="h-3 w-3" />
+                    <span>Add Service Row</span>
+                  </button>
+                )}
+              </div>
+
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-y border-slate-200 text-[10px] uppercase font-bold text-slate-700 tracking-wider">
+                    <th className="py-2.5 px-2 text-left">SERVICE DESCRIPTION</th>
+                    <th className="py-2.5 px-2 w-16 text-center">QTY</th>
+                    <th className="py-2.5 px-2 w-28 text-right">RATE</th>
+                    {viewMode === 'edit' && !isLocked && (
+                      <>
+                        <th className="py-2.5 px-2 w-16 text-center no-print">DISC %</th>
+                        <th className="py-2.5 px-2 w-16 text-center no-print">GST %</th>
+                      </>
+                    )}
+                    <th className="py-2.5 px-2 w-28 text-right">AMOUNT</th>
+                    {viewMode === 'edit' && !isLocked && <th className="py-2.5 px-2 w-8 no-print"></th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {items.map((item, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50/50">
+                      <td className="py-3 px-2 space-y-0.5">
+                        {viewMode === 'edit' && !isLocked ? (
+                          <>
+                            <input
+                              type="text"
+                              placeholder="Service title..."
+                              value={item.name}
+                              onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
+                              className="w-full font-bold px-2 py-1 rounded border border-slate-300 bg-white text-xs text-slate-900 placeholder:text-slate-400 outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Description / deliverables..."
+                              value={item.description}
+                              onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
+                              className="w-full text-xs text-slate-700 px-2 py-0.5 rounded border border-slate-200 bg-white placeholder:text-slate-400 outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          </>
+                        ) : (
+                          <div>
+                            <p className="font-bold text-slate-900 text-xs">{item.name || 'Service Item'}</p>
+                            {item.description && (
+                              <p className="text-[11px] text-slate-600 leading-snug mt-0.5">{item.description}</p>
+                            )}
+                          </div>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-2 text-center">
+                        {viewMode === 'edit' && !isLocked ? (
+                          <input
+                            type="number"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
+                            className="w-12 px-1 py-0.5 rounded border border-slate-300 bg-white text-xs text-center font-bold text-slate-900 outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                        ) : (
+                          <span className="font-medium text-slate-800">{item.quantity}</span>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-2 text-right">
+                        {viewMode === 'edit' && !isLocked ? (
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.rate}
+                            onChange={(e) => handleItemChange(idx, 'rate', e.target.value)}
+                            className="w-24 px-1.5 py-0.5 rounded border border-slate-300 bg-white text-xs text-right font-bold text-slate-900 outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                        ) : (
+                          <span className="font-semibold text-slate-800 font-mono">
+                            Rs. {Number(item.rate || 0).toLocaleString('en-IN')}
+                          </span>
+                        )}
+                      </td>
+
+                      {viewMode === 'edit' && !isLocked && (
+                        <>
+                          <td className="py-3 px-2 text-center no-print">
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              value={item.discountPercent}
+                              onChange={(e) => handleItemChange(idx, 'discountPercent', e.target.value)}
+                              className="w-12 px-1 py-0.5 rounded border border-slate-300 bg-white text-xs text-center font-semibold text-slate-900 outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          </td>
+                          <td className="py-3 px-2 text-center no-print">
+                            <select
+                              value={item.gstRate}
+                              onChange={(e) => handleItemChange(idx, 'gstRate', e.target.value)}
+                              className="px-1 py-0.5 rounded border border-slate-300 bg-white text-xs font-semibold text-slate-900 outline-none focus:ring-1 focus:ring-blue-500"
+                            >
+                              <option value="0" className="text-slate-900 bg-white">0%</option>
+                              <option value="18" className="text-slate-900 bg-white">18%</option>
+                            </select>
+                          </td>
+                        </>
+                      )}
+
+                      <td className="py-3 px-2 text-right">
+                        <span className="font-bold text-slate-800 font-mono">
+                          Rs. {Number(item.subtotal !== undefined ? item.subtotal : (item.rate * item.quantity || 0)).toLocaleString('en-IN')}
+                        </span>
+                      </td>
+
+                      {viewMode === 'edit' && !isLocked && (
+                        <td className="py-3 px-2 text-center no-print">
+                          <button
+                            type="button"
+                            onClick={() => removeItemRow(idx)}
+                            className="text-slate-400 hover:text-red-600 p-0.5 transition"
+                            title="Remove item"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* 5. Subtotal, GST & Grand Total */}
+            <div className="flex flex-col items-end pt-3 space-y-1">
+              <div className="flex justify-between w-64 text-xs text-slate-600 py-0.5">
+                <span>Subtotal</span>
+                <span className="font-medium font-mono text-slate-800">
+                  Rs. {subtotalSum.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex justify-between w-64 text-xs text-slate-600 py-0.5">
+                <span>GST (18% illustrative)</span>
+                <span className="font-medium font-mono text-slate-800">
+                  Rs. {taxTotalSum.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div
+                className="bg-[#edf2f7] rounded-lg px-4 py-2.5 flex justify-between items-center w-72 mt-2"
+                style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}
+              >
+                <span className="text-xs font-black uppercase tracking-wider text-slate-900">GRAND TOTAL</span>
+                <span className="text-base font-black text-slate-900 font-mono">
+                  Rs. {grandTotal.toLocaleString('en-IN')}
+                </span>
+              </div>
+            </div>
+
+            {/* 6. Payment Details & QR Code */}
+            <div className="flex justify-between items-start pt-6 gap-6">
+              <div className="space-y-1.5 max-w-sm">
+                <p className="text-xs font-black uppercase tracking-wider text-slate-900">PAYMENT DETAILS</p>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Scan the QR code to make payment.<br />
+                  Please mention the quotation number<br />
+                  in the payment reference.
+                </p>
+              </div>
+              <div className="text-center shrink-0">
+                <div className="w-24 h-24 p-1.5 bg-white border border-slate-200 rounded-lg shadow-2xs mx-auto flex items-center justify-center">
+                  <img
+                    src={qrCodeUrl}
+                    alt="Scan & Pay QR"
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-700 block mt-1">
+                  SCAN & PAY
+                </span>
+              </div>
+            </div>
+
+            {/* 7. Payment Terms & Terms and Conditions */}
+            <div className="space-y-3 pt-4">
+              <div>
+                <p className="text-xs font-bold text-slate-900 mb-0.5">Payment Terms</p>
+                {viewMode === 'edit' && !isLocked ? (
+                  <input
+                    type="text"
+                    value={paymentTerms}
+                    onChange={(e) => setPaymentTerms(e.target.value)}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-medium text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                ) : (
+                  <p className="text-xs text-slate-700">{paymentTerms}</p>
+                )}
+              </div>
+
+              <div>
+                <p className="text-xs font-bold text-slate-900 mb-0.5">Terms & Conditions</p>
+                {viewMode === 'edit' && !isLocked ? (
+                  <textarea
+                    rows={3}
+                    value={termsAndConditions}
+                    onChange={(e) => setTermsAndConditions(e.target.value)}
+                    className="w-full p-2.5 rounded-lg border border-slate-300 bg-white text-xs font-medium text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                ) : (
+                  <div className="text-xs text-slate-700 whitespace-pre-line leading-relaxed">
+                    {termsAndConditions}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 8. Footer */}
+            <div className="pt-6 mt-8 border-t border-slate-200 flex justify-between items-center text-[10px] text-slate-400 font-medium">
+              <span>ARTHO VISTA | www.arthovista.com | connect@arthovista.com</span>
+              <span>
+                <h3>{selectedLead?.name}</h3>
+                <h3>Authorized Signatory</h3>
+              </span>
             </div>
           </div>
         </div>

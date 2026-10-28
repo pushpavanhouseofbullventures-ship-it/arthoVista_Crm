@@ -4,7 +4,7 @@ import { Lead } from '../models/Lead';
 import { UserOrganizationRole } from '../models/UserOrganizationRole';
 import { Role } from '../models/Role';
 import { User } from '../models/User';
-import { FollowUp } from '../models/FollowUp'; 
+import { FollowUp } from '../models/FollowUp';
 import { Session } from '../models/Session';
 import { Activity } from '../models/Activity';
 import { Organization } from '../models/Organization';
@@ -12,19 +12,24 @@ import { AssignmentLog } from '../models/AssignmentLog';
 import { AuditLog } from '../models/AuditLog';
 import logger from '../utils/logger';
 
+export const ADMIN_EMAILS = ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'];
+export const isMasterAdmin = (email?: string) => ADMIN_EMAILS.includes((email || '').toLowerCase().trim());
+export const isSystemAdmin = (role?: string, email?: string) =>
+  ['Admin', 'Super Admin'].includes(role || '') || isMasterAdmin(email);
+
 // GET WORKLOAD & AUTO ASSIGNMENT CONFIG
 export async function getAssignmentConfig(req: Request, res: Response, next: NextFunction) {
   try {
     const orgId = req.organizationId;
     const userRole = (req as any).userRole;
-    const isSuperAdmin = ['Super Admin', 'Admin'].includes(userRole) || req.user?.email === 'shivamthakur12012@gmail.com';
+    const isSuperAdmin = isSystemAdmin(userRole, req.user?.email);
     const isManager = isSuperAdmin || userRole === 'Manager';
     const isTeamLeader = isManager || userRole === 'Team Leader';
 
     // 1. Fetch organizational hierarchy roles (Admin, Manager, Team Leader, Finance, Operation, Sale Executive)
-    const salesRoles = await Role.find({ 
-      name: { $in: ['Admin', 'Super Admin', 'Manager', 'Team Leader', 'Finance', 'Operation', 'Operations', 'Sale Executive', 'Sales Executive', 'Employee'] }, 
-      organizationId: null 
+    const salesRoles = await Role.find({
+      name: { $in: ['Admin', 'Super Admin', 'Manager', 'Team Leader', 'Finance', 'Operation', 'Operations', 'Sale Executive', 'Sales Executive', 'Employee'] },
+      organizationId: null
     });
     const roleIds = salesRoles.map(r => r._id);
 
@@ -101,8 +106,8 @@ export async function getAssignmentConfig(req: Request, res: Response, next: Nex
 export async function autoAssignUnassignedLeads(req: Request, res: Response, next: NextFunction) {
   try {
     const userRole = (req as any).userRole;
-    const isSuperAdmin = ['Super Admin', 'Admin', 'Manager'].includes(userRole) || req.user?.email === 'shivamthakur12012@gmail.com';
-    if (!isSuperAdmin) {
+    const isAuthorized = isSystemAdmin(userRole, req.user?.email) || userRole === 'Manager';
+    if (!isAuthorized) {
       return res.status(403).json({
         success: false,
         message: 'Access denied. Only Admins and Managers can execute auto-assignment rules.',
@@ -129,9 +134,9 @@ export async function autoAssignUnassignedLeads(req: Request, res: Response, nex
     }
 
     // Fetch active sales & operations reps across all tiers
-    const salesRoles = await Role.find({ 
-      name: { $in: ['Admin', 'Super Admin', 'Manager', 'Team Leader', 'Finance', 'Operation', 'Operations', 'Sale Executive', 'Sales Executive', 'Employee'] }, 
-      organizationId: null 
+    const salesRoles = await Role.find({
+      name: { $in: ['Admin', 'Super Admin', 'Manager', 'Team Leader', 'Finance', 'Operation', 'Operations', 'Sale Executive', 'Sales Executive', 'Employee'] },
+      organizationId: null
     });
     const roleIds = salesRoles.map(r => r._id);
 
@@ -156,19 +161,44 @@ export async function autoAssignUnassignedLeads(req: Request, res: Response, nex
     for (let i = 0; i < unassignedLeads.length; i++) {
       const lead = unassignedLeads[i];
       const rep = activeReps[i % activeReps.length];
+      const oldRep = lead.assignedTo;
 
       lead.assignedTo = rep._id;
       lead.status = 'Open';
       await lead.save();
 
+      let oldRepName = '';
+      if (oldRep) {
+        const oldUser = await User.findById(oldRep);
+        if (oldUser) oldRepName = `${oldUser.firstName} ${oldUser.lastName}`;
+      }
+
       await AssignmentLog.create({
         organizationId: orgId,
         leadId: lead._id,
         assignedBy: userId,
+        fromUserId: oldRep,
         toUserId: rep._id,
         ruleApplied: 'round_robin',
         reason: 'Bulk auto-assignment rule executed'
       });
+
+      await Activity.create({
+        organizationId: orgId,
+        leadId: lead._id,
+        userId,
+        type: 'assignment_change',
+        content: oldRepName
+          ? `Lead reassigned from ${oldRepName} to ${rep.firstName} ${rep.lastName}. All activities, notes, and records of ${oldRepName} are maintained.`
+          : `Lead auto-assigned to ${rep.firstName} ${rep.lastName} via Round Robin.`,
+        metadata: { fromRep: oldRep, toRep: rep._id, fromRepName: oldRepName, toRepName: `${rep.firstName} ${rep.lastName}` }
+      });
+
+      // Transfer pending follow-ups so the new sales rep receives them on schedule
+      await FollowUp.updateMany(
+        { leadId: lead._id, organizationId: orgId, status: 'pending' },
+        { assignedTo: rep._id }
+      );
 
       assignedCount++;
     }
@@ -187,7 +217,7 @@ export async function autoAssignUnassignedLeads(req: Request, res: Response, nex
 export async function registerEmployee(req: Request, res: Response, next: NextFunction) {
   try {
     const userRole = (req as any).userRole;
-    const isAuthorized = ['Super Admin', 'Admin', 'Manager'].includes(userRole) || req.user?.email === 'shivamthakur12012@gmail.com';
+    const isAuthorized = isSystemAdmin(userRole, req.user?.email) || userRole === 'Manager';
     if (!isAuthorized) {
       return res.status(403).json({
         success: false,
@@ -217,12 +247,11 @@ export async function registerEmployee(req: Request, res: Response, next: NextFu
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    
-    // Normalize role to hierarchy (Admin, Manager, Team Leader, Finance, Operation, Sale Executive)
+
+    // Normalize role to hierarchy (Admin, Manager, Finance, Operation, HR, Sale Executive)
     let cleanRole = role;
     if (role === 'Super Admin' || role === 'Admin') cleanRole = 'Admin';
     else if (role === 'Manager') cleanRole = 'Manager';
-    else if (role === 'Team Leader' || role === 'TL') cleanRole = 'Team Leader';
     else if (role === 'Finance') cleanRole = 'Finance';
     else if (role === 'Operation' || role === 'Operations') cleanRole = 'Operation';
     else if (role === 'HR' || role === 'HR Executive' || role === 'HR Caller') cleanRole = 'HR';
@@ -327,7 +356,7 @@ export async function getEmployeesList(req: Request, res: Response, next: NextFu
   try {
     const orgId = req.organizationId;
     const userRole = (req as any).userRole;
-    const isAuthorized = ['Super Admin', 'Admin', 'Manager', 'Team Leader'].includes(userRole) || req.user?.email === 'shivamthakur12012@gmail.com';
+    const isAuthorized = isSystemAdmin(userRole, req.user?.email) || ['Manager', 'Team Leader'].includes(userRole);
     if (!isAuthorized) {
       return res.status(403).json({
         success: false,
@@ -336,7 +365,7 @@ export async function getEmployeesList(req: Request, res: Response, next: NextFu
       });
     }
 
-    const isSuperAdmin = ['Super Admin', 'Admin'].includes(userRole) || req.user?.email === 'shivamthakur12012@gmail.com';
+    const isAdmin = isSystemAdmin(userRole, req.user?.email);
 
     const memberships = await UserOrganizationRole.find({ organizationId: orgId })
       .populate('userId', 'firstName lastName email status createdAt')
@@ -346,8 +375,8 @@ export async function getEmployeesList(req: Request, res: Response, next: NextFu
     const filteredMemberships = memberships.filter((m: any) => {
       if (!m.userId) return false;
       const roleName = m.roleId?.name || 'Employee';
-      // Conceal Super Admin from non-super-admins
-      if (!isSuperAdmin && roleName === 'Super Admin') return false;
+      // Conceal Admin from non-admins
+      if (!isAdmin && ['Super Admin', 'Admin'].includes(roleName)) return false;
       return true;
     });
 
@@ -391,14 +420,14 @@ export async function getEmployeesList(req: Request, res: Response, next: NextFu
   }
 }
 
-// TOGGLE EMPLOYEE STATUS (Super Admin only)
+// TOGGLE EMPLOYEE STATUS (Admin only)
 export async function toggleEmployeeStatus(req: Request, res: Response, next: NextFunction) {
   try {
     const userRole = (req as any).userRole;
-    if (userRole !== 'Super Admin') {
+    if (!isSystemAdmin(userRole, req.user?.email)) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied. Only Super Admins can manage employee statuses.',
+        message: 'Access denied. Only Admins can manage employee statuses.',
         errorCode: 'FORBIDDEN'
       });
     }
@@ -409,6 +438,29 @@ export async function toggleEmployeeStatus(req: Request, res: Response, next: Ne
     const user = await User.findById(id);
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    if (isMasterAdmin(user.email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Admin accounts cannot be deactivated.',
+        errorCode: 'CANNOT_DEACTIVATE_ADMIN'
+      });
+    }
+
+    const orgId = req.organizationId;
+    const targetMember = await UserOrganizationRole.findOne({
+      userId: user._id,
+      organizationId: orgId
+    }).populate('roleId');
+
+    const targetRoleName = (targetMember?.roleId as any)?.name;
+    if (targetRoleName === 'Admin' || targetRoleName === 'Super Admin' || isSystemAdmin(targetRoleName, user.email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Admin accounts cannot be deactivated.',
+        errorCode: 'CANNOT_DEACTIVATE_ADMIN'
+      });
     }
 
     user.status = status || (user.status === 'active' ? 'inactive' : 'active');
@@ -433,14 +485,14 @@ export async function toggleEmployeeStatus(req: Request, res: Response, next: Ne
   }
 }
 
-// DELETE EMPLOYEE & SAFELY TRANSFER ASSIGNED LEADS TO UNASSIGNED QUEUE (Super Admin only)
+// DELETE EMPLOYEE & SAFELY TRANSFER ASSIGNED LEADS TO UNASSIGNED QUEUE (Admin only)
 export async function deleteEmployee(req: Request, res: Response, next: NextFunction) {
   try {
     const userRole = (req as any).userRole;
-    if (userRole !== 'Super Admin') {
+    if (!isSystemAdmin(userRole, req.user?.email)) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied. Only Super Admins can delete employees.',
+        message: 'Access denied. Only Admins can delete employees.',
         errorCode: 'FORBIDDEN'
       });
     }
@@ -452,7 +504,7 @@ export async function deleteEmployee(req: Request, res: Response, next: NextFunc
     if (id === adminId) {
       return res.status(400).json({
         success: false,
-        message: 'You cannot delete your own Super Admin account.',
+        message: 'You cannot delete your own Admin account.',
         errorCode: 'CANNOT_DELETE_SELF'
       });
     }
@@ -463,6 +515,28 @@ export async function deleteEmployee(req: Request, res: Response, next: NextFunc
         success: false,
         message: 'User not found.',
         errorCode: 'NOT_FOUND'
+      });
+    }
+
+    if (isMasterAdmin(user.email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Primary Admin accounts cannot be deleted.',
+        errorCode: 'CANNOT_DELETE_PRIMARY_ADMIN'
+      });
+    }
+
+    const targetMember = await UserOrganizationRole.findOne({
+      userId: user._id,
+      organizationId: orgId
+    }).populate('roleId');
+
+    const targetRoleName = (targetMember?.roleId as any)?.name;
+    if (targetRoleName === 'Admin' || targetRoleName === 'Super Admin' || isSystemAdmin(targetRoleName, user.email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Admin accounts cannot be deleted.',
+        errorCode: 'CANNOT_DELETE_ADMIN'
       });
     }
 

@@ -89,10 +89,14 @@ export async function register(req: Request, res: Response, next: NextFunction) 
       const orgId = primaryOrg._id || primaryOrg.id;
       const orgName = primaryOrg.name;
 
-      // 3.3. Fetch Role (Super Admin for Shivam, otherwise Employee)
-      const isSuper = email === 'shivamthakur12012@gmail.com';
-      const roleName = isSuper ? 'Super Admin' : 'Employee';
-      const userRole = await Role.findOne({ name: roleName, organizationId: null }).session(mongoSession);
+      // 3.3. Fetch Role (Admin for master admins, otherwise Employee)
+      const cleanEmail = email.trim().toLowerCase();
+      const isMasterAdmin = ['shivamthakur12012@gmail.com', 'shivam.arthaventures@gmail.com'].includes(cleanEmail);
+      const roleName = isMasterAdmin ? 'Admin' : 'Employee';
+      let userRole = await Role.findOne({ name: roleName, organizationId: null }).session(mongoSession);
+      if (!userRole && roleName === 'Admin') {
+        userRole = await Role.findOne({ name: 'Super Admin', organizationId: null }).session(mongoSession);
+      }
       if (!userRole) {
         throw new Error(`Default ${roleName} role not found. Run seeds.`);
       }
@@ -218,16 +222,25 @@ export async function login(req: Request, res: Response, next: NextFunction) {
         populate: { path: 'permissions', select: 'name' }
       });
 
+    const isUserMasterAdmin = ['shivamthakur12012@gmail.com', 'shivam.arthaventures@gmail.com'].includes(user.email.toLowerCase());
     const activeOrganizations = mappings
       .filter((m: any) => m.organizationId && !m.organizationId.isSuspended)
-      .map((m: any) => ({
-        id: m.organizationId?._id || m.organizationId?.id,
-        name: m.organizationId?.name,
-        businessType: m.organizationId?.businessType,
-        logoUrl: m.organizationId?.logoUrl,
-        role: m.roleId?.name,
-        permissions: m.roleId?.permissions?.map((p: any) => (typeof p === 'object' && p ? p.name : p)) || []
-      }));
+      .map((m: any) => {
+        const rawRole = m.roleId?.name;
+        const normalizedRole = isUserMasterAdmin ? 'Admin' : (rawRole === 'Super Admin' ? 'Admin' : rawRole);
+        const perms = m.roleId?.permissions?.map((p: any) => (typeof p === 'object' && p ? p.name : p)) || [];
+        if (isUserMasterAdmin && !perms.includes('platform:admin')) {
+          perms.push('platform:admin');
+        }
+        return {
+          id: m.organizationId?._id || m.organizationId?.id,
+          name: m.organizationId?.name,
+          businessType: m.organizationId?.businessType,
+          logoUrl: m.organizationId?.logoUrl,
+          role: normalizedRole,
+          permissions: perms
+        };
+      });
 
     // Audit log
     await AuditLog.create({

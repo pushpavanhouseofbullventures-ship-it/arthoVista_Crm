@@ -45,17 +45,16 @@ export const DashboardLayout: React.FC = () => {
 
   // Active organization details
   const activeOrg = organizations.find(org => org.id === activeOrganizationId) || organizations[0];
-  const activeRole = activeOrg?.role || (user?.email === 'shivamthakur12012@gmail.com' ? 'Admin' : 'Sale Executive');
+  const activeRole = activeOrg?.role || (user?.email === 'shivam.arthaventures@gmail.com' ? 'Admin' : 'Sale Executive');
 
-  // 5-Level Role Hierarchy:
+  // Role Hierarchy:
   // 1. Admin (Super Admin)
   // 2. Manager
-  // 3. TL (Team Leader)
-  // 4. Finance
-  // 5. Operation
-  const isAdmin = ['Admin', 'Super Admin'].includes(activeRole) || user?.email === 'shivamthakur12012@gmail.com';
+  // 3. Finance
+  // 4. Operation
+  // 5. Sale Executive
+  const isAdmin = ['Admin', 'Super Admin'].includes(activeRole) || user?.email === 'shivam.arthaventures@gmail.com';
   const isManager = isAdmin || activeRole === 'Manager';
-  const isTeamLeader = isManager || activeRole === 'Team Leader' || activeRole === 'TL';
   const isFinance = activeRole === 'Finance' || activeRole?.toLowerCase().includes('finance');
   const isOperation = ['Operation', 'Operations'].includes(activeRole) || activeRole?.toLowerCase().includes('operat');
   const hasOTAccess = isManager || isFinance || isOperation;
@@ -63,7 +62,8 @@ export const DashboardLayout: React.FC = () => {
     ['HR', 'HR Executive', 'HR Caller', 'HR Specialist', 'HR Manager'].includes(activeRole) ||
     activeRole?.toLowerCase().includes('hr');
   const hasHRAccess = isManager || isHR;
-  const isPrivileged = isTeamLeader;
+  const isPrivileged = isManager;
+  const isTeamLeader = isManager;
 
   const toggleSidebar = () => {
     setSidebarCollapsed(prev => {
@@ -268,7 +268,7 @@ export const DashboardLayout: React.FC = () => {
                 <div className="flex flex-col min-w-0">
                   <div className="flex items-center space-x-1.5">
                     <span className="font-extrabold text-sm text-slate-950 dark:text-white tracking-tight leading-tight">
-                      Artho Vista
+                      ArthoVista
                     </span>
                     <span className="text-[9px] font-extrabold bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300 px-1 py-0.2 rounded border border-orange-300">
                       CRM
@@ -311,7 +311,7 @@ export const DashboardLayout: React.FC = () => {
           <div className={`flex-1 flex flex-col overflow-y-auto py-3 space-y-3 ${sidebarCollapsed ? 'px-2' : 'px-3.5'}`}>
             {/* Active Workspace / Org Card */}
             {!sidebarCollapsed ? (
-              <div className="p-2.5 rounded-xl border border-slate-300 dark:border-dark-700 flex items-center space-x-2.5 transition cursor-default btn-tri-45">
+              <div className="p-2.5 rounded-xl border border-slate-300 dark:border-dark-700 flex items-center space-x-2.5 transition cursor-default">
                 <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0">
                   <Building2 className="h-3.5 w-3.5" />
                 </div>
@@ -362,9 +362,8 @@ export const DashboardLayout: React.FC = () => {
                     <span className="inline-block text-[9px] font-extrabold text-blue-700 dark:text-blue-300 uppercase tracking-wider truncate">
                       {activeRole === 'Admin' || activeRole === 'Super Admin' ? '1. Admin' :
                         activeRole === 'Manager' ? '2. Manager' :
-                          activeRole === 'Team Leader' || activeRole === 'TL' ? '3. TL' :
-                            activeRole === 'Finance' ? '4. Finance' :
-                              activeRole === 'Operation' || activeRole === 'Operations' ? '5. Operation' : 'Sale Executive'}
+                          activeRole === 'Finance' ? 'Finance' :
+                            activeRole === 'Operation' || activeRole === 'Operations' ? 'Operation' : 'Sale Executive'}
                     </span>
                   </div>
                 </div>
@@ -468,27 +467,11 @@ export const DashboardLayout: React.FC = () => {
                   return `${greeting}, ${name}! 🙏`;
                 })()}
               </span>
-              <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-dark-800 border border-slate-300 dark:border-dark-700">
-                <Building2 className="h-3.5 w-3.5 text-blue-700 dark:text-blue-300" />
-                <span className="text-slate-400 dark:text-dark-500">&bull;</span>
-                <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
-                  Live Sync
-                </span>
-              </div>
             </div>
           </div>
 
           {/* Right Header: Search, Actions, Theme Toggle, Profile */}
           <div className="flex items-center space-x-2.5 sm:space-x-3">
-            {/* Quick Report Issue Button */}
-            <button
-              onClick={() => setShowReportIssueModal(true)}
-              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-rose-500/15 via-orange-500/10 to-rose-500/15 hover:from-rose-500/25 hover:to-orange-500/20 text-rose-900 dark:text-rose-200 border border-rose-300/80 dark:border-rose-700/70 text-xs font-black transition shadow-sm hover:shadow active:scale-95 group"
-              title="Report an Issue or Bug"
-            >
-              <Bug className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400 group-hover:rotate-12 transition-transform" />
-              <span>Report Issue</span>
-            </button>
 
             {/* Success Tool Button */}
             <button

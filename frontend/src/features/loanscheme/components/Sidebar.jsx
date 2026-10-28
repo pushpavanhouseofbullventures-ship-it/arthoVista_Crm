@@ -147,7 +147,7 @@ export default function Sidebar({ schemes = [], benefits = [], activeCategory, o
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-brand btn-tri-45">
+      <div className="sidebar-brand bg-slate-900">
         <div className="sidebar-brand-logo">
           ArthoVista
         </div>

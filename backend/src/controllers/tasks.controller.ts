@@ -6,7 +6,7 @@ export async function getTasks(req: Request, res: Response, next: NextFunction) 
   try {
     const orgId = req.organizationId;
     const userRole = (req as any).userRole;
-    const isPrivileged = ['Admin', 'Super Admin', 'Manager', 'Team Leader'].includes(userRole) || req.user?.email === 'shivamthakur12012@gmail.com';
+    const isPrivileged = ['Admin', 'Super Admin', 'Manager', 'Team Leader'].includes(userRole) || ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(req.user?.email || '');
     const userId = req.user?.id;
     const { status, priority, assignedTo } = req.query;
 
@@ -40,7 +40,7 @@ export async function createTask(req: Request, res: Response, next: NextFunction
   try {
     const orgId = req.organizationId;
     const userRole = (req as any).userRole;
-    const isPrivileged = ['Admin', 'Super Admin', 'Manager', 'Team Leader'].includes(userRole) || req.user?.email === 'shivamthakur12012@gmail.com';
+    const isPrivileged = ['Admin', 'Super Admin', 'Manager', 'Team Leader'].includes(userRole) || ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(req.user?.email || '');
     const userId = req.user?.id;
     const { title, description, assignedTo, leadId, customerId, dealId, caseId, dueDate, priority } = req.body;
 

@@ -12,11 +12,10 @@ export const BulkUpload: React.FC = () => {
   const queryClient = useQueryClient();
   const { user, organizations, activeOrganizationId } = useAuthStore();
   const activeOrg = organizations.find(org => org.id === activeOrganizationId) || organizations[0];
-  const activeRole = activeOrg?.role || (user?.email === 'shivamthakur12012@gmail.com' ? 'Admin' : 'Sale Executive');
-  const isAdmin = ['Admin', 'Super Admin'].includes(activeRole) || user?.email === 'shivamthakur12012@gmail.com';
+  const activeRole = activeOrg?.role || (['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '') ? 'Admin' : 'Sale Executive');
+  const isAdmin = ['Admin', 'Super Admin'].includes(activeRole) || ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '');
   const isManager = isAdmin || activeRole === 'Manager';
-  const isTeamLeader = isManager || activeRole === 'Team Leader';
-  const isPrivileged = isTeamLeader;
+  const isPrivileged = isManager;
 
   const [file, setFile] = useState<File | null>(null);
   const [parsedRows, setParsedRows] = useState<any[]>([]);

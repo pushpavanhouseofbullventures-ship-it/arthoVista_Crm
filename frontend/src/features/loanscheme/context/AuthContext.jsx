@@ -12,7 +12,7 @@ export const DEMO_USERS = [
     name: 'Vikramaditya Sharma',
     email: 'superadmin@enego.in',
     role: ROLES.SUPER_ADMIN,
-    roleTitle: 'Super Admin',
+    roleTitle: 'Admin',
     badgeColor: '#dc2626',
     avatar: '👑',
     passcode: 'admin123',
@@ -40,7 +40,7 @@ export const DEMO_USERS = [
     avatar: '🛡️',
     passcode: 'admin456',
     department: 'Business Operations & Verification',
-    description: 'Can audit, view directory, and filter schemes. Editing and deletion require Super Admin approval.',
+    description: 'Can audit, view directory, and filter schemes. Editing and deletion require Admin approval.',
     permissions: {
       canAddScheme: false,
       canEditScheme: false,

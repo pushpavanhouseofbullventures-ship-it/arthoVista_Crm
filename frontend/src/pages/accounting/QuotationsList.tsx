@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
-import { 
+import {
   FileText, Plus, Search, Eye
 } from 'lucide-react';
 
@@ -68,15 +68,15 @@ export const QuotationsList: React.FC = () => {
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {/* Header */}
-      <div className="relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-800 p-6 rounded-3xl shadow-sm">
+      <div className="relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-800 p-6 rounded-3xl shadow-sm btn-tri-45">
         {/* Subtle Ambient 45-deg orbs */}
         <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-[#fe7c02]/10 rounded-full blur-3xl pointer-events-none"></div>
         <div className="absolute bottom-0 right-1/3 -mb-16 w-64 h-64 bg-[#028825]/10 rounded-full blur-3xl pointer-events-none"></div>
 
         <div className="flex items-center space-x-3.5 z-10">
           <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#fe7c02] via-[#0062d1] to-[#028825] p-0.5 shadow-sm flex items-center justify-center flex-shrink-0">
-            <div className="w-full h-full bg-white dark:bg-dark-900 rounded-[14px] flex items-center justify-center">
-              <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <div className="w-full h-full rounded-[14px] flex items-center justify-center">
+              <FileText className="h-5 w-5 text-white dark:text-white" />
             </div>
           </div>
           <div>
@@ -88,9 +88,6 @@ export const QuotationsList: React.FC = () => {
                 PROPOSALS
               </span>
             </div>
-            <p className="text-xs text-slate-500 dark:text-dark-400 mt-1">
-              Build GST-compliant quotations, track client approvals, and convert accepted deals directly into billing invoices.
-            </p>
           </div>
         </div>
 
@@ -117,11 +114,10 @@ export const QuotationsList: React.FC = () => {
             <button
               key={tab.id}
               onClick={() => { setStatusFilter(tab.id); setPage(1); }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
-                statusFilter === tab.id
-                  ? 'btn-blue-45 text-white shadow-sm'
-                  : 'text-slate-600 dark:text-dark-400 hover:bg-slate-100 dark:hover:bg-dark-800'
-              }`}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${statusFilter === tab.id
+                ? 'btn-blue-45 text-white shadow-sm'
+                : 'text-slate-600 dark:text-dark-400 hover:bg-slate-100 dark:hover:bg-dark-800'
+                }`}
             >
               {tab.name}
             </button>

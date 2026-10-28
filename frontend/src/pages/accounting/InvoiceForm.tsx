@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, Navigate } from 'react-router-dom';
 import { api } from '../../services/api';
+import { useAuthStore } from '../../store/authStore';
 import {
   Plus, Trash2, ArrowLeft, Loader2, AlertCircle, Calculator
 } from 'lucide-react';
@@ -17,6 +18,19 @@ interface FormLineItem {
 export const InvoiceForm: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user, organizations, activeOrganizationId } = useAuthStore();
+  const activeOrg = organizations.find(org => org.id === activeOrganizationId) || organizations[0];
+  const activeRole = activeOrg?.role || (['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '') ? 'Admin' : 'Sale Executive');
+  const isAdmin = ['Admin', 'Super Admin'].includes(activeRole) || ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '');
+  const isManager = isAdmin || activeRole === 'Manager';
+  const isFinance = activeRole === 'Finance' || activeRole?.toLowerCase().includes('finance');
+  const isOperation = ['Operation', 'Operations'].includes(activeRole) || activeRole?.toLowerCase().includes('operat');
+  const isSaleEmployee = activeRole === 'Sale Executive' || activeRole === 'Sales Executive' || activeRole === 'Employee';
+  const hasInvoiceAccess = !isSaleEmployee && (isAdmin || isManager || isFinance || isOperation);
+
+  if (!hasInvoiceAccess) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   const [customerId, setCustomerId] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);

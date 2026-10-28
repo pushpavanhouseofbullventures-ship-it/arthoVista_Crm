@@ -263,27 +263,33 @@ async function seed() {
     }
 
     // 4. Seed 4-Tier Hierarchy Users: Admin, Manager, Team Leader, Sale Executive
-    // 4.1 Tier 1: Admin User
-    const superAdminEmail = 'shivamthakur12012@gmail.com';
-    let superAdmin: any = await User.findOne({ email: superAdminEmail });
-    const superAdminPasswordHash = await bcrypt.hash('Shivam@123', 10);
+    // 4.1 Tier 1: Admin Users (shivamthakur12012@gmail.com & shivam.arthaventures@gmail.com)
+    const adminEmails = ['shivamthakur12012@gmail.com', 'shivam.arthaventures@gmail.com'];
+    const adminUsers: any[] = [];
+    const adminPasswordHash = await bcrypt.hash('Shivam@123', 10);
 
-    if (!superAdmin) {
-      superAdmin = await User.create({
-        email: superAdminEmail,
-        passwordHash: superAdminPasswordHash,
-        firstName: 'Shivam',
-        lastName: 'Thakur',
-        isVerified: true,
-        status: 'active'
-      });
-      logger.info(`Admin user created: ${superAdminEmail}`);
-    } else {
-      superAdmin.passwordHash = superAdminPasswordHash;
-      superAdmin.status = 'active';
-      await superAdmin.save();
-      logger.info(`Admin password updated for: ${superAdminEmail}`);
+    for (const adminEmail of adminEmails) {
+      let adminUser: any = await User.findOne({ email: adminEmail });
+      if (!adminUser) {
+        adminUser = await User.create({
+          email: adminEmail,
+          passwordHash: adminPasswordHash,
+          firstName: 'Shivam',
+          lastName: 'Thakur',
+          isVerified: true,
+          status: 'active'
+        });
+        logger.info(`Admin user created: ${adminEmail}`);
+      } else {
+        adminUser.passwordHash = adminPasswordHash;
+        adminUser.status = 'active';
+        await adminUser.save();
+        logger.info(`Admin password updated for: ${adminEmail}`);
+      }
+      adminUsers.push(adminUser);
     }
+    const superAdmin = adminUsers[0];
+
 
     // 4.2 Tier 2: Manager User
     const managerEmail = 'manager@arthovista.com';
@@ -393,7 +399,7 @@ async function seed() {
 
     // 5. Link Users to Artho Vista CRM Organization
     const userRoleMappings = [
-      { user: superAdmin, roleName: 'Admin' },
+      ...adminUsers.map(u => ({ user: u, roleName: 'Admin' })),
       { user: manager, roleName: 'Manager' },
       { user: teamLead, roleName: 'Team Leader' },
       { user: executive, roleName: 'Sale Executive' },

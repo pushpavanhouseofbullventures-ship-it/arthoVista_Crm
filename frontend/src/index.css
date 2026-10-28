@@ -106,6 +106,98 @@
   color: #e2e8f0 !important;
 }
 
+/* =========================================================================
+   Executive Quotation Document Canvas (Always Pure White Paper with Dark Text)
+   Prevents Dark Mode from turning inputs & copy white-on-white.
+   ========================================================================= */
+.printable-document,
+.dark .printable-document {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* Force all form controls within the quotation paper to remain dark text on white */
+.printable-document input,
+.printable-document select,
+.printable-document textarea,
+.dark .printable-document input,
+.dark .printable-document select,
+.dark .printable-document textarea {
+  color: #0f172a !important;
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  -webkit-text-fill-color: #0f172a !important;
+}
+
+.printable-document input:focus,
+.printable-document select:focus,
+.printable-document textarea:focus,
+.dark .printable-document input:focus,
+.dark .printable-document select:focus,
+.dark .printable-document textarea:focus {
+  border-color: #2563eb !important;
+  outline: none !important;
+}
+
+.printable-document select option,
+.dark .printable-document select option {
+  color: #0f172a !important;
+  background-color: #ffffff !important;
+}
+
+.printable-document input::placeholder,
+.printable-document textarea::placeholder,
+.dark .printable-document input::placeholder,
+.dark .printable-document textarea::placeholder {
+  color: #64748b !important;
+  -webkit-text-fill-color: #64748b !important;
+  opacity: 0.85 !important;
+}
+
+/* High-contrast text clarity overrides inside printable-document */
+.printable-document .text-slate-400,
+.printable-document .text-gray-400,
+.dark .printable-document .text-slate-400,
+.dark .printable-document .text-gray-400 {
+  color: #475569 !important;
+}
+
+.printable-document .text-slate-500,
+.printable-document .text-gray-500,
+.dark .printable-document .text-slate-500,
+.dark .printable-document .text-gray-500 {
+  color: #334155 !important;
+}
+
+.printable-document .text-slate-600,
+.printable-document .text-gray-600,
+.dark .printable-document .text-slate-600,
+.dark .printable-document .text-gray-600 {
+  color: #1e293b !important;
+}
+
+.printable-document .text-slate-700,
+.printable-document .text-gray-700,
+.dark .printable-document .text-slate-700,
+.dark .printable-document .text-gray-700 {
+  color: #0f172a !important;
+}
+
+.printable-document .text-slate-800,
+.printable-document .text-gray-800,
+.dark .printable-document .text-slate-800,
+.dark .printable-document .text-gray-800 {
+  color: #020617 !important;
+}
+
+.printable-document .text-slate-900,
+.printable-document .text-gray-900,
+.printable-document .text-black,
+.dark .printable-document .text-slate-900,
+.dark .printable-document .text-gray-900,
+.dark .printable-document .text-black {
+  color: #000000 !important;
+}
 
 /* Custom Scrollbar & Layout Stability */
 html {
@@ -180,18 +272,21 @@ html {
    ========================================================= */
 @media print {
   @page {
-    size: A4 portrait;
-    margin: 6mm 8mm;
+    size: A4 portrait !important;
+    margin: 8mm 10mm !important;
   }
 
-  /* Force entire document into clean, crisp light mode */
+  /* Universal print resets */
   *,
   *::before,
   *::after {
     box-shadow: none !important;
     text-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
+  /* Force clean white background on page wrappers while preserving watermarks */
   html,
   html.dark,
   body,
@@ -202,8 +297,7 @@ html {
   html.dark main,
   .h-screen,
   html.dark .h-screen,
-  div,
-  html.dark div,
+  div:not(.document-watermark):not(.document-watermark *),
   section,
   article {
     background: #ffffff !important;
@@ -232,77 +326,90 @@ html {
     border: none !important;
   }
 
-  /* Printable document container styling */
+  /* Universal high-contrast text visibility in print - prevents dark mode white-on-white text */
+  h1, h2, h3, h4, h5, h6,
+  p, span, div, strong, b, em, label,
+  td, th, li, a,
+  .dark h1, .dark h2, .dark h3, .dark h4, .dark h5, .dark h6,
+  .dark p, .dark span, .dark div, .dark strong, .dark b, .dark em, .dark label,
+  .dark td, .dark th, .dark li, .dark a {
+    color: #0f172a !important;
+    -webkit-text-fill-color: #0f172a !important;
+  }
+
+  /* Secondary & muted copy in print */
+  .text-slate-400,
+  .text-slate-500,
+  .text-slate-600,
+  .dark .text-slate-400,
+  .dark .text-slate-500,
+  .dark .text-dark-400,
+  .dark .text-dark-500 {
+    color: #475569 !important;
+    -webkit-text-fill-color: #475569 !important;
+  }
+
+  /* High emphasis / Headings / Amounts */
+  .font-black,
+  .font-bold,
+  .dark .font-black,
+  .dark .font-bold {
+    color: #020617 !important;
+    -webkit-text-fill-color: #020617 !important;
+  }
+
+  /* Brand colored accents in print */
+  .text-primary-600,
+  .dark .text-primary-400 {
+    color: #1d4ed8 !important;
+    -webkit-text-fill-color: #1d4ed8 !important;
+    font-weight: 800 !important;
+  }
+
+  .text-green-600,
+  .text-green-700,
+  .dark .text-green-400 {
+    color: #047857 !important;
+    -webkit-text-fill-color: #047857 !important;
+  }
+
+  /* Printable document container styling (Quotation) */
   .printable-document {
     display: flex !important;
     flex-direction: column !important;
     justify-content: space-between !important;
     width: 100% !important;
     max-width: 100% !important;
-    min-height: 265mm !important;
-    max-height: 275mm !important;
+    min-height: 260mm !important;
     margin: 0 !important;
     padding: 0 !important;
     border: none !important;
+    border-radius: 0 !important;
     box-shadow: none !important;
     background: #ffffff !important;
     background-color: #ffffff !important;
     color: #000000 !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
-    page-break-after: avoid !important;
-    break-after: avoid !important;
   }
 
-  .printable-document,
-  .printable-document * {
+  /* Print Invoice Card container styling (Invoice) */
+  .print-invoice-card {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 24px 28px !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 8px !important;
+    box-shadow: none !important;
     background: #ffffff !important;
     background-color: #ffffff !important;
-    color: #000000 !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  .printable-document p,
-  .printable-document span,
-  .printable-document td,
-  .printable-document th,
-  .printable-document div,
-  .printable-document label,
-  .printable-document h1,
-  .printable-document h2,
-  .printable-document h3,
-  .printable-document h4 {
-    color: #000000 !important;
-  }
-
-  /* Secondary & italic text legible in print */
-  .printable-document .text-slate-400,
-  .printable-document .text-slate-500,
-  .printable-document .text-slate-600,
-  .printable-document .text-slate-700 {
-    color: #1e293b !important;
-  }
-
-  /* Specific accents when desired */
-  .printable-document .text-emerald-600,
-  .printable-document .text-emerald-700,
-  .printable-document .text-emerald-800 {
-    color: #047857 !important;
-  }
-
-  .printable-document .text-blue-600,
-  .printable-document .text-blue-700,
-  .printable-document .text-blue-800 {
-    color: #000000 !important;
-    font-weight: 800 !important;
-  }
-
-  .printable-document .text-amber-600,
-  .printable-document .text-amber-700,
-  .printable-document .text-amber-800 {
-    color: #92400e !important;
-    font-weight: 700 !important;
+    color: #0f172a !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    position: relative !important;
+    overflow: hidden !important;
   }
 
   /* Table styling */
@@ -313,23 +420,107 @@ html {
     break-inside: avoid !important;
   }
 
-  th,
-  td {
-    border-color: #e2e8f0 !important;
+  thead {
+    display: table-header-group !important;
   }
 
-  tr {
+  thead tr {
+    background: #f1f5f9 !important;
+    background-color: #f1f5f9 !important;
+    border-bottom: 2px solid #cbd5e1 !important;
+  }
+
+  thead th {
+    color: #0f172a !important;
+    -webkit-text-fill-color: #0f172a !important;
+    background: #f1f5f9 !important;
+    background-color: #f1f5f9 !important;
+    font-weight: 700 !important;
+    border-color: #cbd5e1 !important;
+    padding: 8px 12px !important;
+  }
+
+  tbody tr {
+    border-bottom: 1px solid #e2e8f0 !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
 
-  thead {
-    display: table-header-group !important;
+  tbody td {
+    color: #0f172a !important;
+    -webkit-text-fill-color: #0f172a !important;
+    background: transparent !important;
+    border-color: #e2e8f0 !important;
+    padding: 8px 12px !important;
   }
 
   .print-avoid-break {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
+  }
+
+  /* Document Watermark Print Rules (must preserve subtle diagonal brand & official stamp) */
+  .document-watermark,
+  .document-watermark * {
+    background: transparent !important;
+    background-color: transparent !important;
+  }
+
+  .document-watermark {
+    display: flex !important;
+    opacity: 1 !important;
+    pointer-events: none !important;
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 0 !important;
+  }
+
+  .document-watermark .watermark-text,
+  .dark .document-watermark .watermark-text {
+    color: rgba(15, 23, 42, 0.065) !important;
+    -webkit-text-fill-color: rgba(15, 23, 42, 0.065) !important;
+  }
+
+  .document-watermark svg.watermark-text,
+  .dark .document-watermark svg.watermark-text {
+    stroke: rgba(15, 23, 42, 0.065) !important;
+    color: rgba(15, 23, 42, 0.065) !important;
+  }
+
+  .document-watermark .watermark-stamp-draft {
+    color: rgba(217, 119, 6, 0.45) !important;
+    border-color: rgba(217, 119, 6, 0.45) !important;
+    -webkit-text-fill-color: rgba(217, 119, 6, 0.45) !important;
+  }
+
+  .document-watermark .watermark-stamp-sent {
+    color: rgba(37, 99, 235, 0.45) !important;
+    border-color: rgba(37, 99, 235, 0.45) !important;
+    -webkit-text-fill-color: rgba(37, 99, 235, 0.45) !important;
+  }
+
+  .document-watermark .watermark-stamp-paid {
+    color: rgba(5, 150, 105, 0.5) !important;
+    border-color: rgba(5, 150, 105, 0.5) !important;
+    -webkit-text-fill-color: rgba(5, 150, 105, 0.5) !important;
+  }
+
+  .document-watermark .watermark-stamp-partial {
+    color: rgba(234, 88, 12, 0.45) !important;
+    border-color: rgba(234, 88, 12, 0.45) !important;
+    -webkit-text-fill-color: rgba(234, 88, 12, 0.45) !important;
+  }
+
+  .document-watermark .watermark-stamp-accepted {
+    color: rgba(5, 150, 105, 0.5) !important;
+    border-color: rgba(5, 150, 105, 0.5) !important;
+    -webkit-text-fill-color: rgba(5, 150, 105, 0.5) !important;
+  }
+
+  .document-watermark .watermark-stamp-void {
+    color: rgba(225, 29, 72, 0.5) !important;
+    border-color: rgba(225, 29, 72, 0.5) !important;
+    -webkit-text-fill-color: rgba(225, 29, 72, 0.5) !important;
   }
 }
 
@@ -391,7 +582,7 @@ html {
 }
 
 .btn-blue-45 {
-  background: linear-gradient(135deg, #0062d1 0%, #1d4ed8 100%);
+  background: linear-gradient(135deg, #174819 0%, #1d4ed8 100%);
   color: #ffffff;
   transition: all 0.2s ease;
   box-shadow: 0 4px 12px -2px rgba(0, 98, 209, 0.35);
@@ -412,4 +603,52 @@ html {
 .btn-green-45:hover {
   filter: brightness(1.06);
   transform: translateY(-1px);
+}
+
+/* Executive Quotation Print Styles */
+/* Document Watermark & Status Stamp Styling */
+.document-watermark {
+  background: transparent !important;
+  pointer-events: none !important;
+  user-select: none !important;
+}
+
+.document-watermark .watermark-text {
+  color: rgba(15, 23, 42, 0.055) !important;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+
+.document-watermark svg.watermark-text {
+  stroke: rgba(15, 23, 42, 0.05) !important;
+}
+
+.watermark-stamp-draft {
+  border-color: rgba(217, 119, 6, 0.22) !important;
+  color: rgba(217, 119, 6, 0.22) !important;
+}
+
+.watermark-stamp-paid {
+  border-color: rgba(5, 150, 105, 0.25) !important;
+  color: rgba(5, 150, 105, 0.25) !important;
+}
+
+.watermark-stamp-accepted {
+  border-color: rgba(5, 150, 105, 0.25) !important;
+  color: rgba(5, 150, 105, 0.25) !important;
+}
+
+.watermark-stamp-sent {
+  border-color: rgba(37, 99, 235, 0.28) !important;
+  color: rgba(37, 99, 235, 0.32) !important;
+}
+
+.watermark-stamp-partial {
+  border-color: rgba(234, 88, 12, 0.28) !important;
+  color: rgba(234, 88, 12, 0.32) !important;
+}
+
+.watermark-stamp-void {
+  border-color: rgba(225, 29, 72, 0.25) !important;
+  color: rgba(225, 29, 72, 0.25) !important;
 }

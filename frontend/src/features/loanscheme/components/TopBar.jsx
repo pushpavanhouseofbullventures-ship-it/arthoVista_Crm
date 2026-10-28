@@ -18,10 +18,10 @@ export default function TopBar({
   const { isSuperAdmin, elevateToSuperAdmin } = useAuth();
   const { user, organizations, activeOrganizationId } = useAuthStore();
 
-  // Check if current CRM user is Admin or Super Admin
+  // Check if current CRM user is Admin
   const activeOrg = organizations.find((org) => org.id === activeOrganizationId) || organizations[0];
-  const activeRole = activeOrg?.role || (user?.email === 'shivamthakur12012@gmail.com' ? 'Admin' : 'Sale Executive');
-  const isCrmAdmin = ['Admin', 'Super Admin'].includes(activeRole) || user?.email === 'shivamthakur12012@gmail.com';
+  const activeRole = activeOrg?.role || (['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '') ? 'Admin' : 'Sale Executive');
+  const isCrmAdmin = ['Admin', 'Super Admin'].includes(activeRole) || ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '');
 
   const handleAdminButtonClick = () => {
     if (isAdminView) {

@@ -4,11 +4,15 @@ import { Lead } from '../models/Lead';
 import { Activity } from '../models/Activity';
 import logger from '../utils/logger';
 
+const ADMIN_EMAILS = ['shivamthakur12012@gmail.com', 'shivam.arthaventures@gmail.com'];
+const isSystemAdmin = (role?: string, email?: string) =>
+  ['Admin', 'Super Admin'].includes(role || '') || ADMIN_EMAILS.includes((email || '').toLowerCase().trim());
+
 export async function getFollowUps(req: Request, res: Response, next: NextFunction) {
   try {
     const orgId = req.organizationId;
     const userRole = (req as any).userRole;
-    const isPrivileged = ['Super Admin', 'Manager'].includes(userRole);
+    const isPrivileged = isSystemAdmin(userRole, req.user?.email) || userRole === 'Manager';
     const userId = req.user?.id;
     const { status, type, period, assignedTo } = req.query;
 
@@ -59,7 +63,7 @@ export async function createFollowUp(req: Request, res: Response, next: NextFunc
   try {
     const orgId = req.organizationId;
     const userRole = (req as any).userRole;
-    const isPrivileged = ['Super Admin', 'Manager'].includes(userRole);
+    const isPrivileged = isSystemAdmin(userRole, req.user?.email) || userRole === 'Manager';
     const userId = req.user?.id;
     const { leadId, customerId, date, time, type, notes, assignedTo } = req.body;
 

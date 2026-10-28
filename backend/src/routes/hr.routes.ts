@@ -20,13 +20,13 @@ router.use(authenticate, tenantIsolation);
 // Protected: Only Admin, Manager, and HR roles are authorized to access HR endpoints
 router.use((req: Request, res: Response, next: NextFunction) => {
   const userRole = (req as any).userRole;
-  const isSuperAdmin = ['Super Admin', 'Admin'].includes(userRole) || req.user?.email === 'shivamthakur12012@gmail.com';
-  const isManager = isSuperAdmin || userRole === 'Manager';
+  const isAdmin = ['Super Admin', 'Admin'].includes(userRole) || ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(req.user?.email || '');
+  const isManager = isAdmin || userRole === 'Manager';
   const isHR =
     ['HR', 'HR Executive', 'HR Caller', 'HR Specialist', 'HR Manager'].includes(userRole) ||
     (typeof userRole === 'string' && userRole.toLowerCase().includes('hr'));
 
-  if (!isSuperAdmin && !isManager && !isHR) {
+  if (!isAdmin && !isManager && !isHR) {
     return res.status(403).json({
       success: false,
       message: 'Access denied. The HR section is restricted to Admin, Manager, and HR staff only.',

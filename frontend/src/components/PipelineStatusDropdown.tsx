@@ -3,7 +3,9 @@ import { createPortal } from 'react-dom';
 import {
   ChevronRight, ChevronDown,
   Check, X, ArrowRight, Zap,
+  Trophy, AlertCircle
 } from 'lucide-react';
+import { useAuthStore } from '../store/authStore';
 
 export interface PipelineStageSelection {
   leadId: string;
@@ -11,13 +13,19 @@ export interface PipelineStageSelection {
   subStage?: string;
   lostReason?: string;
   transitionNotes?: string;
+  paymentExpected?: number;
+  paymentReceived?: number;
 }
+
 
 interface PipelineStatusDropdownProps {
   leadId: string;
   currentStatus: string;
   currentSubStage?: string;
   currentLostReason?: string;
+  paymentExpected?: number;
+  paymentReceived?: number;
+  paymentDue?: number;
   disabled?: boolean;
   readOnly?: boolean;
   onSelectStage?: (params: PipelineStageSelection) => void;
@@ -34,7 +42,7 @@ interface SubOption {
 }
 
 interface MainStage {
-  id: 'new' | 'open' | 'converted' | 'lost';
+  id: 'leads' | 'converted' | 'lost';
   status: 'New' | 'Open' | 'Converted' | 'Lost';
   label: string;
   colorClass: string;
@@ -50,16 +58,36 @@ export const PipelineStatusDropdown: React.FC<PipelineStatusDropdownProps> = ({
   currentStatus = 'New',
   currentSubStage,
   currentLostReason,
+  paymentExpected,
+  paymentReceived,
+  paymentDue,
   disabled = false,
   readOnly = false,
   onSelectStage,
   showFastAdvance = true,
   size = 'sm'
 }) => {
+  const { user, organizations, activeOrganizationId } = useAuthStore();
+  const activeOrg = organizations.find(org => org.id === activeOrganizationId) || organizations[0];
+  const activeRole = activeOrg?.role || (['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '') ? 'Admin' : 'Sale Executive');
+  const isAdmin = ['Admin', 'Super Admin'].includes(activeRole) || ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '');
+
+  const effectiveExpected = Number(paymentExpected ?? 0);
+  const effectiveReceived = Number(paymentReceived ?? 0);
+  const effectiveDue = paymentDue !== undefined 
+    ? Number(paymentDue) 
+    : Math.max(0, effectiveExpected - effectiveReceived);
+  const isExpectedLocked = !isAdmin && effectiveExpected > 0;
   const [isOpen, setIsOpen] = useState(false);
   const [showAdvanceModal, setShowAdvanceModal] = useState(false);
   const [advanceNotes, setAdvanceNotes] = useState('');
-  const [hoveredStageId, setHoveredStageId] = useState<'new' | 'open' | 'converted' | 'lost' | null>(null);
+  const [showConversionModal, setShowConversionModal] = useState(false);
+  const [targetConversionOption, setTargetConversionOption] = useState<SubOption | null>(null);
+  const [conversionExpected, setConversionExpected] = useState<string>('');
+  const [conversionReceived, setConversionReceived] = useState<string>('');
+  const [conversionNotes, setConversionNotes] = useState<string>('');
+  const [conversionError, setConversionError] = useState<string | null>(null);
+  const [hoveredStageId, setHoveredStageId] = useState<'leads' | 'converted' | 'lost' | null>(null);
   const [coords, setCoords] = useState<{
     top?: number;
     bottom?: number;
@@ -75,54 +103,38 @@ export const PipelineStatusDropdown: React.FC<PipelineStatusDropdownProps> = ({
 
   // Normalize current states
   const rawStatus = (currentStatus || 'New').trim().toLowerCase();
-  let parentStatus: 'new' | 'open' | 'converted' | 'lost' = 'new';
-  if (['new', 'today'].includes(rawStatus)) {
-    parentStatus = 'new';
-  } else if (['converted', 'won'].includes(rawStatus)) {
+  let parentStatus: 'leads' | 'converted' | 'lost' = 'leads';
+  if (['converted', 'won'].includes(rawStatus)) {
     parentStatus = 'converted';
   } else if (['lost'].includes(rawStatus)) {
     parentStatus = 'lost';
   } else {
-    parentStatus = 'open';
+    parentStatus = 'leads';
   }
 
-  const activeSubStage = currentSubStage || (parentStatus === 'open' ? 'In Process' : parentStatus === 'converted' ? 'Direct Won' : '');
+  const normalizedSubStage = (currentSubStage === 'Payment Expected' || currentSubStage === 'Payment Remaining' || currentSubStage === 'Negotiation')
+    ? 'In Process'
+    : currentSubStage;
+  const activeSubStage = normalizedSubStage || (parentStatus === 'leads' ? (rawStatus === 'new' ? 'New Leads' : 'In Process') : parentStatus === 'converted' ? 'Direct Won' : '');
   const activeLostReason = currentLostReason || (parentStatus === 'lost' ? 'Other' : '');
 
-  // Main Pipeline Tracks Configuration
+  // Main Pipeline Tracks Configuration matching CRM Pipelines & Sub-pipelines
   const PIPELINE_CONFIG: MainStage[] = [
     {
-      id: 'new',
-      status: 'New',
-      label: 'New Leads',
-      colorClass: 'text-[#fe7c02] dark:text-orange-400',
-      badgeBg: 'bg-orange-500/10 text-[#fe7c02] dark:text-orange-400 border border-orange-500/25',
-      hoverBg: 'hover:bg-orange-50/80 dark:hover:bg-orange-950/30',
-      activeBorder: 'border-[#fe7c02]',
-      textColor: 'text-[#fe7c02]',
+      id: 'leads',
+      status: 'Open',
+      label: 'Leads',
+      colorClass: 'text-blue-600 dark:text-blue-400',
+      badgeBg: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+      hoverBg: 'hover:bg-blue-50/80 dark:hover:bg-blue-950/30',
+      activeBorder: 'border-blue-500',
+      textColor: 'text-blue-600',
       subOptions: [
         {
-          id: 'new_fresh',
-          label: 'Fresh Inbound Lead',
+          id: 'new_leads',
+          label: 'New Leads',
           status: 'New'
         },
-        {
-          id: 'new_reset',
-          label: 'Reset to New Queue',
-          status: 'New'
-        }
-      ]
-    },
-    {
-      id: 'open',
-      status: 'Open',
-      label: 'Open Pipeline',
-      colorClass: 'text-amber-600 dark:text-amber-400',
-      badgeBg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
-      hoverBg: 'hover:bg-amber-50/80 dark:hover:bg-amber-950/30',
-      activeBorder: 'border-amber-500',
-      textColor: 'text-amber-600',
-      subOptions: [
         {
           id: 'In Process',
           label: 'In Process',
@@ -140,25 +152,25 @@ export const PipelineStatusDropdown: React.FC<PipelineStatusDropdownProps> = ({
           label: 'Proposal Sent',
           status: 'Open',
           subStage: 'Proposal Sent'
-        },
-        {
-          id: 'Negotiation',
-          label: 'Negotiation',
-          status: 'Open',
-          subStage: 'Negotiation'
         }
       ]
     },
     {
       id: 'converted',
       status: 'Converted',
-      label: 'Converted (Won)',
+      label: 'Converted',
       colorClass: 'text-emerald-600 dark:text-emerald-400',
       badgeBg: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
       hoverBg: 'hover:bg-emerald-50/80 dark:hover:bg-emerald-950/30',
       activeBorder: 'border-emerald-500',
       textColor: 'text-emerald-600',
       subOptions: [
+        {
+          id: 'Direct Won',
+          label: 'Direct Won',
+          status: 'Converted',
+          subStage: 'Direct Won'
+        },
         {
           id: 'Quotation Won',
           label: 'Quotation Won',
@@ -167,21 +179,9 @@ export const PipelineStatusDropdown: React.FC<PipelineStatusDropdownProps> = ({
         },
         {
           id: 'Invoiced',
-          label: 'Invoiced & Billed',
+          label: 'Invoiced',
           status: 'Converted',
           subStage: 'Invoiced'
-        },
-        {
-          id: 'Direct Won',
-          label: 'Direct Won',
-          status: 'Converted',
-          subStage: 'Direct Won'
-        },
-        {
-          id: 'High Value',
-          label: 'High Value Deal',
-          status: 'Converted',
-          subStage: 'High Value'
         }
       ]
     },
@@ -197,7 +197,7 @@ export const PipelineStatusDropdown: React.FC<PipelineStatusDropdownProps> = ({
       subOptions: [
         {
           id: 'Price',
-          label: 'Price Constraint',
+          label: 'Price',
           status: 'Lost',
           lostReason: 'Price'
         },
@@ -209,7 +209,7 @@ export const PipelineStatusDropdown: React.FC<PipelineStatusDropdownProps> = ({
         },
         {
           id: 'Competitor',
-          label: 'Competitor Chosen',
+          label: 'Competitor',
           status: 'Lost',
           lostReason: 'Competitor'
         },
@@ -221,7 +221,7 @@ export const PipelineStatusDropdown: React.FC<PipelineStatusDropdownProps> = ({
         },
         {
           id: 'Other',
-          label: 'Other Reason',
+          label: 'Other',
           status: 'Lost',
           lostReason: 'Other'
         }
@@ -324,12 +324,17 @@ export const PipelineStatusDropdown: React.FC<PipelineStatusDropdownProps> = ({
 
   // Fast Advance Helper
   const getNextFastStage = (): PipelineStageSelection | null => {
-    if (parentStatus === 'new') return { leadId, status: 'Open', subStage: 'In Process' };
-    if (parentStatus === 'open') {
+    if (parentStatus === 'leads') {
+      if (rawStatus === 'new') return { leadId, status: 'Open', subStage: 'In Process' };
       if (activeSubStage === 'In Process') return { leadId, status: 'Open', subStage: 'Qualified' };
       if (activeSubStage === 'Qualified') return { leadId, status: 'Open', subStage: 'Proposal Sent' };
-      if (activeSubStage === 'Proposal Sent') return { leadId, status: 'Open', subStage: 'Negotiation' };
-      if (activeSubStage === 'Negotiation') return { leadId, status: 'Converted', subStage: 'Direct Won' };
+      if (activeSubStage === 'Proposal Sent') return { leadId, status: 'Converted', subStage: 'Direct Won' };
+    }
+    if (parentStatus === 'converted') {
+      if (activeSubStage === 'Direct Won') return { leadId, status: 'Converted', subStage: 'Quotation Won' };
+      if (activeSubStage === 'Quotation Won' && effectiveDue <= 0) {
+        return { leadId, status: 'Converted', subStage: 'Invoiced' };
+      }
     }
     return null;
   };
@@ -337,28 +342,65 @@ export const PipelineStatusDropdown: React.FC<PipelineStatusDropdownProps> = ({
   const nextFastStage = getNextFastStage();
 
   const handleSelectOption = (opt: SubOption) => {
-    onSelectStage({
-      leadId,
-      status: opt.status,
-      subStage: opt.subStage,
-      lostReason: opt.lostReason
-    });
+    // If moving to Invoiced directly, payment due must be <= 0
+    if (opt.subStage === 'Invoiced' || opt.id === 'Invoiced') {
+      if (parentStatus === 'converted' && effectiveDue > 0) {
+        alert(`Cannot move lead to "Invoiced":\n\nOutstanding payment due is ₹${effectiveDue.toLocaleString('en-IN')}.\nPayment due must be ₹0 or less (fully paid) before moving to Invoiced.`);
+        return;
+      }
+    }
+
+    // If moving to Converted from another stage, require entering payment expected!
+    if (opt.status === 'Converted' && parentStatus !== 'converted') {
+      setTargetConversionOption(opt);
+      setConversionExpected(effectiveExpected > 0 ? String(effectiveExpected) : '');
+      setConversionReceived(effectiveReceived > 0 ? String(effectiveReceived) : '');
+      setConversionNotes('');
+      setConversionError(null);
+      setShowConversionModal(true);
+      setIsOpen(false);
+      setHoveredStageId(null);
+      return;
+    }
+
+    if (onSelectStage) {
+      onSelectStage({
+        leadId,
+        status: opt.status,
+        subStage: opt.subStage,
+        lostReason: opt.lostReason
+      });
+    }
     setIsOpen(false);
     setHoveredStageId(null);
   };
 
-  // Active label & icon to render in badge
-  const currentBadgeTheme = PIPELINE_CONFIG.find(p => p.id === parentStatus) || PIPELINE_CONFIG[0];
+  // Active label & dynamic theme to render in badge
+  const currentBadgeTheme = {
+    badgeBg:
+      rawStatus === 'new'
+        ? 'bg-orange-500/10 text-[#fe7c02] dark:text-orange-400 border border-orange-500/25'
+        : parentStatus === 'converted'
+          ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/25'
+          : parentStatus === 'lost'
+            ? 'bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/25'
+            : activeSubStage === 'Qualified'
+              ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/25'
+              : activeSubStage === 'Proposal Sent'
+                ? 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/25'
+                : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25'
+  };
+
   const activeLabel =
-    parentStatus === 'new' ? 'New Lead' :
-      parentStatus === 'open' ? (activeSubStage || 'In Process') :
+    rawStatus === 'new' ? 'New Lead' :
+      parentStatus === 'leads' ? (activeSubStage || 'In Process') :
         parentStatus === 'converted' ? (activeSubStage || 'Converted') :
-          parentStatus === 'lost' ? (activeLostReason || 'Lost') : 'New';
+          parentStatus === 'lost' ? (activeLostReason || 'Lost') : 'New Lead';
 
   const hoveredStage = PIPELINE_CONFIG.find(p => p.id === hoveredStageId);
 
   // Position submenu right next to hovered main item
-  const handleItemHover = (stageId: 'new' | 'open' | 'converted' | 'lost', elem: HTMLDivElement | null) => {
+  const handleItemHover = (stageId: 'leads' | 'converted' | 'lost', elem: HTMLDivElement | null) => {
     setHoveredStageId(stageId);
     if (elem) {
       const rect = elem.getBoundingClientRect();
@@ -422,8 +464,22 @@ export const PipelineStatusDropdown: React.FC<PipelineStatusDropdownProps> = ({
           disabled={disabled}
           onClick={(e) => {
             e.stopPropagation();
-            setAdvanceNotes('');
-            setShowAdvanceModal(true);
+            if (nextFastStage.status === 'Converted' && parentStatus !== 'converted') {
+              setTargetConversionOption({
+                id: nextFastStage.subStage || 'Converted',
+                label: nextFastStage.subStage || 'Payment Received',
+                status: 'Converted',
+                subStage: nextFastStage.subStage
+              });
+              setConversionExpected('');
+              setConversionReceived('');
+              setConversionNotes('');
+              setConversionError(null);
+              setShowConversionModal(true);
+            } else {
+              setAdvanceNotes('');
+              setShowAdvanceModal(true);
+            }
           }}
           title={`Fast Advance: Move to ${nextFastStage.subStage || nextFastStage.status} (Add Handoff Notes)`}
           className="p-1 rounded-lg bg-slate-100/80 hover:bg-amber-100/90 text-slate-500 hover:text-amber-700 dark:bg-dark-800 dark:hover:bg-amber-950/60 dark:text-dark-400 dark:hover:text-amber-300 border border-slate-200/60 dark:border-dark-700 transition shadow-xs hover:scale-105 active:scale-95 cursor-pointer"
@@ -472,7 +528,7 @@ export const PipelineStatusDropdown: React.FC<PipelineStatusDropdownProps> = ({
                       onMouseEnter={(e) => handleItemHover(stage.id, e.currentTarget)}
                       onClick={() => {
                         // If direct click on main item without sub-options
-                        if (stage.subOptions.length === 1 || stage.id === 'new') {
+                        if (stage.subOptions.length === 1) {
                           handleSelectOption(stage.subOptions[0]);
                         }
                       }}
@@ -524,30 +580,45 @@ export const PipelineStatusDropdown: React.FC<PipelineStatusDropdownProps> = ({
                 <div className="space-y-1">
                   {hoveredStage.subOptions.map((subOpt) => {
                     const isSelected =
-                      (hoveredStage.id === 'open' && activeSubStage === subOpt.subStage) ||
-                      (hoveredStage.id === 'converted' && (activeSubStage === subOpt.subStage || (!activeSubStage && subOpt.subStage === 'Direct Won'))) ||
-                      (hoveredStage.id === 'lost' && (activeLostReason === subOpt.lostReason || (!activeLostReason && subOpt.lostReason === 'Other'))) ||
-                      (hoveredStage.id === 'new' && parentStatus === 'new');
+                      (hoveredStage.id === 'leads' && (
+                        (subOpt.status === 'New' && rawStatus === 'new') ||
+                        (subOpt.status === 'Open' && rawStatus !== 'new' && activeSubStage === subOpt.subStage)
+                      )) ||
+                      (hoveredStage.id === 'converted' && (
+                        activeSubStage === subOpt.subStage || (!activeSubStage && subOpt.subStage === 'Direct Won')
+                      )) ||
+                      (hoveredStage.id === 'lost' && (
+                        activeLostReason === subOpt.lostReason || (!activeLostReason && subOpt.lostReason === 'Other')
+                      ));
+
+                    const isInvoiceOption = subOpt.subStage === 'Invoiced' || subOpt.id === 'Invoiced';
+                    const isInvoiceBlocked = isInvoiceOption && parentStatus === 'converted' && effectiveDue > 0;
 
                     return (
                       <div
                         key={subOpt.id}
                         onClick={() => handleSelectOption(subOpt)}
-                        className={`group flex items-start justify-between p-2 rounded-xl cursor-pointer transition-all duration-150 border ${isSelected
+                        className={`group flex items-center justify-between p-2 rounded-xl cursor-pointer transition-all duration-150 border ${isSelected
                           ? 'bg-primary-50/80 dark:bg-primary-950/40 border-primary-300 dark:border-primary-800/80 shadow-xs'
-                          : 'border-transparent hover:bg-slate-50 dark:hover:bg-dark-800/80 hover:border-slate-200/80 dark:hover:border-dark-700'
+                          : isInvoiceBlocked
+                            ? 'border-transparent bg-slate-50/50 dark:bg-dark-850/50 hover:bg-rose-50/50 dark:hover:bg-rose-950/20'
+                            : 'border-transparent hover:bg-slate-50 dark:hover:bg-dark-800/80 hover:border-slate-200/80 dark:hover:border-dark-700'
                           }`}
+                        title={isInvoiceBlocked ? `Payment due must be ₹0 or less to invoice (Outstanding Due: ₹${effectiveDue.toLocaleString('en-IN')})` : undefined}
                       >
-                        <div className="flex items-start space-x-2 min-w-0">
-                          <div className="min-w-0">
-                            <p className={`text-xs font-bold truncate ${isSelected ? 'text-primary-700 dark:text-primary-300' : 'text-slate-800 dark:text-slate-200 group-hover:text-primary-600 dark:group-hover:text-primary-400'}`}>
-                              {subOpt.label}
-                            </p>
-                          </div>
+                        <div className="flex items-center space-x-2 min-w-0">
+                          <p className={`text-xs font-bold truncate ${isSelected ? 'text-primary-700 dark:text-primary-300' : isInvoiceBlocked ? 'text-slate-500 dark:text-slate-400' : 'text-slate-800 dark:text-slate-200 group-hover:text-primary-600 dark:group-hover:text-primary-400'}`}>
+                            {subOpt.label}
+                          </p>
+                          {isInvoiceBlocked && (
+                            <span className="text-[10px] font-bold text-rose-500 bg-rose-50 dark:bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-200 dark:border-rose-800 shrink-0">
+                              Due: ₹{effectiveDue.toLocaleString('en-IN')}
+                            </span>
+                          )}
                         </div>
 
                         {isSelected && (
-                          <div className="ml-2 flex-shrink-0 mt-1">
+                          <div className="ml-2 flex-shrink-0">
                             <span className="flex items-center justify-center w-4 h-4 rounded-full btn-blue-45 text-white text-[10px] shadow-xs">
                               <Check className="w-2.5 h-2.5 stroke-[3]" />
                             </span>
@@ -670,6 +741,178 @@ export const PipelineStatusDropdown: React.FC<PipelineStatusDropdownProps> = ({
                     <span>Confirm & Advance</span>
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* 4. Mandatory Conversion to Won Modal (Requires Payment Expected) */}
+      {showConversionModal && targetConversionOption &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="relative w-full max-w-md bg-white dark:bg-dark-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-dark-700 p-6 space-y-4 animate-in zoom-in-95 duration-150"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-500/20 shadow-xs">
+                    <Trophy className="w-5 h-5 fill-emerald-500" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-slate-900 dark:text-white">
+                      Convert Lead to Won
+                    </h3>
+                    <p className="text-xs text-slate-400">Target Stage: <span className="font-bold text-emerald-600 dark:text-emerald-400">{targetConversionOption.label}</span></p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowConversionModal(false)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-dark-800 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {conversionError && (
+                <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs font-semibold flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{conversionError}</span>
+                </div>
+              )}
+
+              {/* Form Fields */}
+              <div className="space-y-3.5 text-xs">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-800 dark:text-white">
+                      Payment Expected (₹) <span className="text-rose-500">* Required</span>
+                    </label>
+                    {isExpectedLocked && (
+                      <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800">
+                        🔒 Admin Locked
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-2.5 font-bold text-slate-400">₹</span>
+                    <input
+                      type="number"
+                      autoFocus={!isExpectedLocked}
+                      required
+                      min="1"
+                      step="any"
+                      disabled={isExpectedLocked}
+                      placeholder="e.g. 50000"
+                      value={conversionExpected}
+                      onChange={(e) => {
+                        setConversionExpected(e.target.value);
+                        if (conversionError) setConversionError(null);
+                      }}
+                      className={`w-full pl-8 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-dark-700 font-mono text-sm font-bold outline-none transition ${
+                        isExpectedLocked
+                          ? 'bg-slate-100 dark:bg-dark-900 text-slate-400 cursor-not-allowed select-none'
+                          : 'bg-slate-50 dark:bg-dark-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500'
+                      }`}
+                    />
+                  </div>
+                  {isExpectedLocked ? (
+                    <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">Payment expected was already filled and is locked for standard employees.</p>
+                  ) : (
+                    <p className="text-[10px] text-slate-400 mt-1">Payment expected must be entered when moving a lead to Converted.</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Initial Payment Received / Completed (₹) <span className="text-slate-400 font-normal">(Optional)</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-2.5 font-bold text-slate-400">₹</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      placeholder="0 (or enter advance collected)"
+                      value={conversionReceived}
+                      onChange={(e) => setConversionReceived(e.target.value)}
+                      className="w-full pl-8 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-dark-700 bg-slate-50 dark:bg-dark-800 font-mono text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
+                    />
+                  </div>
+                </div>
+
+                {Number(conversionExpected) > 0 && (
+                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-dark-800/60 border border-slate-200 dark:border-dark-700 flex items-center justify-between font-mono text-xs">
+                    <span className="text-slate-500">Calculated Due Balance:</span>
+                    <span className="font-black text-rose-600 dark:text-rose-400">
+                      ₹{Math.max(0, Number(conversionExpected) - (Number(conversionReceived) || 0)).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Conversion Remarks / Handover Notes
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={conversionNotes}
+                    onChange={(e) => setConversionNotes(e.target.value)}
+                    placeholder="Enter deal notes, agreed payment terms, or client confirmation..."
+                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-dark-700 bg-slate-50 dark:bg-dark-800 text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition resize-none"
+                  />
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100 dark:border-dark-800">
+                <button
+                  type="button"
+                  onClick={() => setShowConversionModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-800 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const exp = isExpectedLocked ? effectiveExpected : Number(conversionExpected);
+                    if ((!conversionExpected && !isExpectedLocked) || isNaN(exp) || exp <= 0) {
+                      setConversionError('Payment Expected amount is required to convert this lead.');
+                      return;
+                    }
+                    const rec = Number(conversionReceived) || 0;
+                    const due = Math.max(0, exp - rec);
+
+                    // Restrict moving to Invoiced when payment due > 0
+                    if (targetConversionOption.subStage === 'Invoiced' && due > 0) {
+                      setConversionError(`Cannot convert to "Invoiced" with pending balance. Outstanding due is ₹${due.toLocaleString('en-IN')}. Payment due must be ₹0 or less before invoicing.`);
+                      return;
+                    }
+
+                    if (onSelectStage) {
+                      onSelectStage({
+                        leadId,
+                        status: 'Converted',
+                        subStage: targetConversionOption.subStage,
+                        paymentExpected: exp,
+                        paymentReceived: rec,
+                        transitionNotes: conversionNotes.trim() || undefined
+                      });
+                    }
+                    setShowConversionModal(false);
+                  }}
+                  className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white text-xs font-black shadow-md shadow-emerald-500/20 active:scale-95 transition cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  <span>Confirm & Convert</span>
+                </button>
               </div>
             </div>
           </div>,

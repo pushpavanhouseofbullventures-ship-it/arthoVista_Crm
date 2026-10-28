@@ -60,14 +60,15 @@ export async function tenantIsolation(req: Request, res: Response, next: NextFun
       return next();
     }
 
-    // 3. Fallback: If user has no explicit org role yet, check if Super Admin exists or assign to primary org
-    const isSuperAdmin = req.user.email === 'shivamthakur12012@gmail.com';
-    if (isSuperAdmin) {
-      const superAdminRole = await Role.findOne({ name: 'Super Admin', organizationId: null });
-      if (superAdminRole) {
+    // 3. Fallback: If user has no explicit org role yet, check if Admin exists or assign to primary org
+    const ADMIN_EMAILS = ['shivamthakur12012@gmail.com', 'shivam.arthaventures@gmail.com'];
+    const isMasterAdmin = ADMIN_EMAILS.includes((req.user.email || '').toLowerCase().trim());
+    if (isMasterAdmin) {
+      const adminRole = (await Role.findOne({ name: 'Admin', organizationId: null })) || (await Role.findOne({ name: 'Super Admin', organizationId: null }));
+      if (adminRole) {
         req.organizationId = orgId || '';
-        req.userRoleId = superAdminRole.id || superAdminRole._id;
-        req.userRole = 'Super Admin';
+        req.userRoleId = adminRole.id || adminRole._id;
+        req.userRole = 'Admin';
         return next();
       }
     }

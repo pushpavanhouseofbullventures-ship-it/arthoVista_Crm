@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Bug, PlusCircle, Search, Filter, RefreshCw, AlertCircle,
-  Clock, CheckCircle2, AlertTriangle, Layers, MessageSquare,
-  ExternalLink, User, ChevronRight, ShieldAlert, Sparkles, Check
+  Bug, PlusCircle, Search, RefreshCw,
+  Clock, CheckCircle2, Layers, MessageSquare,
+  ChevronRight, ShieldAlert, Check
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
@@ -25,7 +25,7 @@ const MODULES_FILTER = [
 export const IssueReportsPage: React.FC = () => {
   const { user, organizations, activeOrganizationId } = useAuthStore();
   const activeOrg = organizations.find((o) => o.id === activeOrganizationId) || organizations[0];
-  const userRole = activeOrg?.role || (user?.email === 'shivamthakur12012@gmail.com' ? 'Admin' : 'Sale Executive');
+  const userRole = activeOrg?.role || (['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '') ? 'Admin' : 'Sale Executive');
 
   const [issues, setIssues] = useState<any[]>([]);
   const [stats, setStats] = useState({
@@ -168,28 +168,19 @@ export const IssueReportsPage: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto space-y-6 animate-fadeIn pb-12">
       {/* 1. Header Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white p-6 sm:p-8 shadow-xl border border-slate-800">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-orange-500/20 via-blue-500/10 to-transparent rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
-
+      <div className="relative overflow-hidden rounded-3xl text-white p-6 sm:p-8 shadow-xl border border-slate-800 btn-tri-45">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-2">
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-orange-500/20 border border-orange-400/40 text-orange-300 text-xs font-bold">
+            <div className="inline-flex items-center space-x-2 px-3 py-1 text-white bg-black rounded-full border-orange-400/40 text-xs">
               <Bug className="h-3.5 w-3.5" />
-              <span>CRM Employee Helpdesk & Bug Tracker</span>
+              <span>Issue Report Section</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-              Issue Report Section
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-              Found a bug, visual glitch, or sync issue anywhere in Artho Vista CRM?
-              Report it instantly to have the admin and engineering team address it immediately.
-            </p>
           </div>
 
           <div className="flex items-center space-x-3 flex-shrink-0">
             <button
               onClick={() => setIsReportModalOpen(true)}
-              className="inline-flex items-center space-x-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs shadow-lg shadow-orange-500/30 active:scale-95 transition"
+              className="inline-flex items-center space-x-2 px-5 py-3 rounded-2xl text-white bg-black hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs shadow-lg shadow-orange-500/30 active:scale-95 transition"
             >
               <PlusCircle className="h-4 w-4" />
               <span>Report An Issue</span>
@@ -265,11 +256,10 @@ export const IssueReportsPage: React.FC = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex-shrink-0 ${
-                  activeTab === tab.id
-                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm font-extrabold'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-800'
-                }`}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex-shrink-0 ${activeTab === tab.id
+                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm font-extrabold'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-800'
+                  }`}
               >
                 {tab.label}
               </button>
@@ -368,15 +358,14 @@ export const IssueReportsPage: React.FC = () => {
             >
               {/* Left Accent Stripe based on severity */}
               <span
-                className={`absolute left-0 top-0 bottom-0 w-1 ${
-                  item.severity === 'critical'
-                    ? 'bg-rose-500'
-                    : item.severity === 'high'
+                className={`absolute left-0 top-0 bottom-0 w-1 ${item.severity === 'critical'
+                  ? 'bg-rose-500'
+                  : item.severity === 'high'
                     ? 'bg-orange-500'
                     : item.severity === 'medium'
-                    ? 'bg-amber-500'
-                    : 'bg-emerald-500'
-                }`}
+                      ? 'bg-amber-500'
+                      : 'bg-emerald-500'
+                  }`}
               />
 
               {/* Main Content */}

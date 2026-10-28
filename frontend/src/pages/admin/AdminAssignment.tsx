@@ -12,21 +12,21 @@ export const AdminAssignment: React.FC = () => {
   const queryClient = useQueryClient();
   const { user, organizations, activeOrganizationId } = useAuthStore();
   const activeOrg = organizations.find(org => org.id === activeOrganizationId) || organizations[0];
-  const currentRole = activeOrg?.role || (user?.email === 'shivamthakur12012@gmail.com' ? 'Admin' : 'Sale Executive');
+  const currentRole = activeOrg?.role || (['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '') ? 'Admin' : 'Sale Executive');
 
   // 4-Tier Hierarchy: 1. Admin, 2. Manager, 3. Team Leader, 4. Sale Executive
-  const isAdmin = ['Super Admin', 'Admin'].includes(currentRole) || user?.email === 'shivamthakur12012@gmail.com';
+  const isAdmin = ['Super Admin', 'Admin'].includes(currentRole) || ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '');
   const isSuperAdmin = isAdmin;
 
   const [activeTab, setActiveTab] = useState<'employees' | 'unassigned' | 'rules' | 'audit'>('employees');
 
-  // Register Employee Modal State (4-level hierarchy)
+  // Register Employee Modal State (Core hierarchy: Admin, Manager, Sale Executive)
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [newFirstName, setNewFirstName] = useState('');
   const [newLastName, setNewLastName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [newRole, setNewRole] = useState<'Admin' | 'Manager' | 'Team Leader' | 'Finance' | 'Operation' | 'Sale Executive' | 'HR'>('Sale Executive');
+  const [newRole, setNewRole] = useState<'Admin' | 'Manager' | 'Finance' | 'Operation' | 'Sale Executive' | 'HR'>('Sale Executive');
 
   // Delete Employee State
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
@@ -406,30 +406,47 @@ export const AdminAssignment: React.FC = () => {
                         <td className="p-3 text-center font-semibold">{emp.workload?.conversionRate || 0}%</td>
                         <td className="p-3 text-right">
                           {isSuperAdmin ? (
-                            <div className="inline-flex items-center space-x-1.5">
-                              <button
-                                onClick={() => toggleStatusMutation.mutate({
-                                  id: emp.id,
-                                  status: emp.status === 'active' ? 'inactive' : 'active'
-                                })}
-                                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition ${emp.status === 'active'
-                                    ? 'bg-slate-100 hover:bg-amber-50 text-slate-600 hover:text-amber-600 dark:bg-dark-800 dark:hover:bg-amber-950/30 dark:text-dark-400 dark:hover:text-amber-400'
-                                    : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
-                                  }`}
-                              >
-                                {emp.status === 'active' ? 'Deactivate' : 'Activate'}
-                              </button>
+                            (() => {
+                              const isAdmin =
+                                emp.role === 'Admin' ||
+                                emp.role === 'Super Admin' ||
+                                ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(emp.email);
 
-                              {emp.id !== user?.id && emp.role !== 'Super Admin' && (
-                                <button
-                                  onClick={() => setDeleteTarget(emp)}
-                                  title="Delete employee and unassign leads"
-                                  className="p-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:hover:bg-rose-950/60 dark:text-rose-400 transition"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
-                              )}
-                            </div>
+                              if (isAdmin) {
+                                return (
+                                  <span className="text-[10px] font-semibold text-slate-400 dark:text-dark-500 italic pr-2">
+                                    Protected (Admin)
+                                  </span>
+                                );
+                              }
+
+                              return (
+                                <div className="inline-flex items-center space-x-1.5">
+                                  <button
+                                    onClick={() => toggleStatusMutation.mutate({
+                                      id: emp.id,
+                                      status: emp.status === 'active' ? 'inactive' : 'active'
+                                    })}
+                                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition ${emp.status === 'active'
+                                        ? 'bg-slate-100 hover:bg-amber-50 text-slate-600 hover:text-amber-600 dark:bg-dark-800 dark:hover:bg-amber-950/30 dark:text-dark-400 dark:hover:text-amber-400'
+                                        : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
+                                      }`}
+                                  >
+                                    {emp.status === 'active' ? 'Deactivate' : 'Activate'}
+                                  </button>
+
+                                  {emp.id !== user?.id && !['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(emp.email) && (
+                                    <button
+                                      onClick={() => setDeleteTarget(emp)}
+                                      title="Delete employee and unassign leads"
+                                      className="p-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:hover:bg-rose-950/60 dark:text-rose-400 transition"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })()
                           ) : (
                             <span className="text-[11px] text-slate-400 dark:text-dark-500 font-medium italic">
                               View Only
@@ -644,7 +661,7 @@ export const AdminAssignment: React.FC = () => {
         </div>
       )}
 
-      {/* REGISTER EMPLOYEE MODAL (Super Admin only) */}
+      {/* REGISTER EMPLOYEE MODAL (Admin only) */}
       {showRegisterModal && isSuperAdmin && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
           <div className="bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
@@ -735,11 +752,10 @@ export const AdminAssignment: React.FC = () => {
                 >
                   <option value="Admin">1. Admin (Full system & organization control)</option>
                   <option value="Manager">2. Manager (Team management, unassigned queues, reports)</option>
-                  <option value="Team Leader">3. TL (Supervise team of sales executives, allocate leads)</option>
-                  <option value="HR">HR / HR Calling (Candidate recruitment & telecalling)</option>
-                  <option value="Finance">4. Finance (Billing review, tax invoices & payments in OT Pipeline)</option>
-                  <option value="Operation">5. Operation (KYC, service execution & delivery milestones in OT Pipeline)</option>
                   <option value="Sale Executive">Sale Executive (Direct client outreach, follow-ups, quotes)</option>
+                  <option value="HR">HR / HR Calling (Candidate recruitment & telecalling)</option>
+                  <option value="Finance">Finance (Billing review, tax invoices & payments in OT Pipeline)</option>
+                  <option value="Operation">Operation (KYC, service execution & delivery milestones in OT Pipeline)</option>
                 </select>
               </div>
 
@@ -765,7 +781,7 @@ export const AdminAssignment: React.FC = () => {
         </div>
       )}
 
-      {/* DELETE EMPLOYEE CONFIRMATION MODAL (Super Admin only) */}
+      {/* DELETE EMPLOYEE CONFIRMATION MODAL (Admin only) */}
       {deleteTarget && isSuperAdmin && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
           <div className="bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">

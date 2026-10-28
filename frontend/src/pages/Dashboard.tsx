@@ -17,11 +17,10 @@ import {
 export const Dashboard: React.FC = () => {
   const { user, organizations, activeOrganizationId } = useAuthStore();
   const activeOrg = organizations.find(org => org.id === activeOrganizationId) || organizations[0];
-  const activeRole = activeOrg?.role || (user?.email === 'shivamthakur12012@gmail.com' ? 'Admin' : 'Sale Executive');
-  const isAdmin = ['Admin', 'Super Admin'].includes(activeRole) || user?.email === 'shivamthakur12012@gmail.com';
+  const activeRole = activeOrg?.role || (['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '') ? 'Admin' : 'Sale Executive');
+  const isAdmin = ['Admin', 'Super Admin'].includes(activeRole) || ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '');
   const isManager = isAdmin || activeRole === 'Manager';
-  const isTeamLeader = isManager || activeRole === 'Team Leader';
-  const isPrivileged = isTeamLeader;
+  const isPrivileged = isManager;
   const [chartView, setChartView] = useState<'area' | 'bar'>('area');
 
   const getRoleBadge = (roleName: string) => {
@@ -73,21 +72,21 @@ export const Dashboard: React.FC = () => {
   };
 
   const monthlyTrends = dashboardData?.monthlyTrends || [
-    { month: 'Mar', leads: 12, open: 8, followups: 15, converted: 3, lost: 1 },
-    { month: 'Apr', leads: 18, open: 11, followups: 22, converted: 5, lost: 2 },
-    { month: 'May', leads: 25, open: 14, followups: 30, converted: 8, lost: 3 },
-    { month: 'Jun', leads: 31, open: 19, followups: 38, converted: 9, lost: 3 },
-    { month: 'Jul', leads: 42, open: 26, followups: 51, converted: 12, lost: 4 },
-    { month: 'Aug', leads: 50, open: 32, followups: 65, converted: 14, lost: 4 }
+    { month: 'Mar', leads: 0, open: 0, followups: 0, converted: 0, lost: 0 },
+    { month: 'Apr', leads: 0, open: 0, followups: 0, converted: 0, lost: 0 },
+    { month: 'May', leads: 0, open: 0, followups: 0, converted: 0, lost: 0 },
+    { month: 'Jun', leads: 0, open: 0, followups: 0, converted: 0, lost: 0 },
+    { month: 'Jul', leads: 0, open: 0, followups: 0, converted: 0, lost: 0 },
+    { month: 'Aug', leads: 0, open: 0, followups: 0, converted: 0, lost: 0 }
   ];
 
   const statusBreakdown = dashboardData?.statusBreakdown || [
-    { name: 'New', value: 12 },
-    { name: 'Contacted', value: 10 },
-    { name: 'Qualified', value: 8 },
-    { name: 'Follow-up', value: 14 },
-    { name: 'Converted', value: 14 },
-    { name: 'Lost', value: 4 }
+    { name: 'New', value: 0 },
+    { name: 'Contacted', value: 0 },
+    { name: 'Qualified', value: 0 },
+    { name: 'Follow-up', value: 0 },
+    { name: 'Converted', value: 0 },
+    { name: 'Lost', value: 0 }
   ];
 
   const channelBreakdown = dashboardData?.channelBreakdown || [
@@ -107,31 +106,8 @@ export const Dashboard: React.FC = () => {
     Lost: '#ef4444'
   };
 
-  // Greeting time calculation
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
-  };
-
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-10">
-      {/* 1. Luminous Bright Enterprise Header Banner */}
-      <div className="relative overflow-hidden bg-white dark:bg-dark-900 border border-slate-300 dark:border-dark-700 rounded-3xl p-6 md:p-8 shadow-[0_2px_15px_rgba(0,0,0,0.03)] dark:shadow-none btn-tri-45">
-        {/* 45-Degree Brand Ambient Gradients (Orange -> Blue -> Green) */}
-        <div className="absolute -top-12 -left-12 w-80 h-80 bg-[#fe7c02]/15 dark:bg-[#fe7c02]/10 rounded-full blur-3xl pointer-events-none"></div>
-        <div className="absolute top-0 right-0 -mr-24 -mt-24 w-96 h-96 bg-[#0062d1]/15 dark:bg-[#0062d1]/10 rounded-full blur-3xl pointer-events-none"></div>
-        <div className="absolute -bottom-16 right-1/4 w-80 h-80 bg-[#028825]/15 dark:bg-[#028825]/10 rounded-full blur-3xl pointer-events-none"></div>
-
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-1.5">
-            <h3 className="text-2xl md:text-3xl font-extrabold text-slate-950 dark:text-white tracking-tight leading-tight">
-              {getGreeting()}, {user?.firstName || 'Shivam'}!👋
-            </h3>
-          </div>
-        </div>
-      </div>
 
       {/* 2. Key 5 CRM Stage KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -501,7 +477,7 @@ export const Dashboard: React.FC = () => {
               <tbody className="divide-y divide-slate-200 dark:divide-dark-800">
                 {(((dashboardData as any)?.reps || [
                   { user: { firstName: 'Rahul', lastName: 'Verma' }, role: 'Manager', workload: { totalAssigned: 31, openLeads: 19, convertedLeads: 8, lostLeads: 4, conversionRate: 26 } },
-                  { user: { firstName: 'Aman', lastName: 'Gupta' }, role: 'Team Leader', workload: { totalAssigned: 24, openLeads: 14, convertedLeads: 7, lostLeads: 3, conversionRate: 29 } },
+                  { user: { firstName: 'Aman', lastName: 'Gupta' }, role: 'Sale Executive', workload: { totalAssigned: 24, openLeads: 14, convertedLeads: 7, lostLeads: 3, conversionRate: 29 } },
                   { user: { firstName: 'Pooja', lastName: 'Sharma' }, role: 'Sale Executive', workload: { totalAssigned: 28, openLeads: 16, convertedLeads: 9, lostLeads: 3, conversionRate: 32 } }
                 ]).filter((rep: any) => isAdmin || !['Admin', 'Super Admin'].includes(rep.role))).map((rep: any, idx: number) => (
                   <tr key={idx} className="hover:bg-slate-100/70 dark:hover:bg-dark-800/40 transition font-medium">

@@ -7,10 +7,9 @@ import {
   Plus, Search, Users, AlertCircle, Phone,
   MessageSquare, Mail, Send, X,
   ArrowRightLeft, Tag, Trash2, Eye,
-  CheckCircle2, Loader2, UserCheck, Clock,
-  Sparkles, Flame, Trophy, XCircle, PhoneCall, Check,
-  Zap, Target, Handshake, FileText, Receipt,
-  GitBranch, Filter
+  CheckCircle2, Loader2, Clock,
+  Sparkles, Trophy, XCircle, PhoneCall, Check,
+  Zap, Target, FileText, Receipt
 } from 'lucide-react';
 import { PipelineStatusDropdown } from '../../components/PipelineStatusDropdown';
 
@@ -34,11 +33,10 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
   const location = useLocation();
   const { user, organizations, activeOrganizationId } = useAuthStore();
   const activeOrg = organizations.find(org => org.id === activeOrganizationId) || organizations[0];
-  const activeRole = activeOrg?.role || (user?.email === 'shivamthakur12012@gmail.com' ? 'Admin' : 'Sale Executive');
-  const isAdmin = ['Admin', 'Super Admin'].includes(activeRole) || user?.email === 'shivamthakur12012@gmail.com';
+  const activeRole = activeOrg?.role || (['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '') ? 'Admin' : 'Sale Executive');
+  const isAdmin = ['Admin', 'Super Admin'].includes(activeRole) || ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '');
   const isManager = isAdmin || activeRole === 'Manager';
-  const isTeamLeader = isManager || activeRole === 'Team Leader';
-  const isPrivileged = isTeamLeader;
+  const isPrivileged = isManager;
 
   // Detect mode from prop or URL path
   const currentMode = defaultMode || (
@@ -49,11 +47,20 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
             location.pathname.includes('lost-leads') ? 'lost' : 'all'
   );
 
+  const isLeadsMode = ['all', 'today', 'open'].includes(currentMode);
+
+  // Show payment columns in converted pipeline (visible to assigned employees, finance, operation, and management)
+  const showPaymentColumns = currentMode === 'converted';
+
+
   const [search, setSearch] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
   const [employeeFilter, setEmployeeFilter] = useState('');
   const [unassignedOnly, setUnassignedOnly] = useState(false);
-  const [subFilter, setSubFilter] = useState<string>('all');
+  const [subFilter, setSubFilter] = useState<string>(() => {
+    if (location.pathname.includes('today') || defaultMode === 'today') return 'new';
+    return 'all';
+  });
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
@@ -281,6 +288,13 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
     setSelectedLeads([]);
   }, [location.pathname, defaultMode]);
 
+  // Non-managers (Sale Executives) do not manage assignments; ensure unassigned filter reset
+  useEffect(() => {
+    if (!isManager && unassignedOnly) {
+      setUnassignedOnly(false);
+    }
+  }, [isManager, unassignedOnly]);
+
   // Pre-flight duplicate check on phone/email entry
   const checkDuplicate = async (phoneVal: string, emailVal: string) => {
     if (!phoneVal || phoneVal.length < 7) {
@@ -311,7 +325,7 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
 
   // 2. Fetch Leads List (Paginated, filtered)
   const { data: leadsResponse, isLoading } = useQuery({
-    queryKey: ['leads', currentMode, sourceFilter, employeeFilter, unassignedOnly, search, page, limit],
+    queryKey: ['leads', activeOrganizationId, user?.id, currentMode, sourceFilter, employeeFilter, unassignedOnly, search, page, limit],
     queryFn: async () => {
       const res = await api.get('/leads', {
         params: {
@@ -379,6 +393,44 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
     }
   });
 
+  // Quick Dispatch Mutation for Lead Pipeline Stage from Table
+  const quickDispatchMutation = useMutation({
+    mutationFn: async ({ leadId, status, subStage, lostReason, transitionNotes, paymentExpected, paymentReceived }: any) => {
+      const payload: any = {};
+      if (status) payload.status = status;
+      if (subStage) {
+        payload.leadType = subStage;
+        payload.subStage = subStage;
+      }
+      if (status === 'Lost') {
+        payload.lostReason = lostReason || 'Other';
+        payload.leadType = null;
+        payload.subStage = null;
+      }
+      if (status === 'Converted') {
+        payload.adminOverrideReason = 'Direct Dispatch';
+      }
+      if (paymentExpected !== undefined && paymentExpected !== null) {
+        payload.paymentExpected = Number(paymentExpected);
+      }
+      if (paymentReceived !== undefined && paymentReceived !== null) {
+        payload.paymentReceived = Number(paymentReceived);
+      }
+      if (transitionNotes) {
+        payload.transitionNotes = transitionNotes;
+      }
+      const res = await api.put(`/leads/${leadId}`, payload);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+    },
+    onError: (err: any) => {
+      alert(err.response?.data?.message || 'Failed to update lead status.');
+    }
+  });
+
 
 
   const resetNewLeadForm = () => {
@@ -414,7 +466,7 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
     },
     welcome_intro: {
       title: 'Welcome & Initial Introduction',
-      text: (name, service) => `Hi ${name}, thank you for connecting with ArthaVenture regarding ${service || 'business solutions'}. When would be a good time for a quick 5-minute discussion today?`
+      text: (name, service) => `Hi ${name}, thank you for connecting with ArthoVista regarding ${service || 'business solutions'}. When would be a good time for a quick 5-minute discussion today?`
     },
     document_reminder: {
       title: 'Pending Document Collection',
@@ -437,8 +489,8 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
     setSelectedLeadForAction(lead);
     setEmailErrorMsg(null);
     setEmailSuccessMsg(null);
-    setEmailSubject(`Proposal Follow-up: ArthaVenture — ${lead.serviceInterested || 'Services'}`);
-    setEmailBody(`Dear ${lead.name},\n\nThank you for your interest in our services. We look forward to working with you.\n\nPlease feel free to contact us with any questions.\n\nWarm regards,\nSales Team\nArthaVenture`);
+    setEmailSubject(`Proposal Follow-up: ArthoVista — ${lead.serviceInterested || 'Services'}`);
+    setEmailBody(`Dear ${lead.name},\n\nThank you for your interest in our services. We look forward to working with you.\n\nPlease feel free to contact us with any questions.\n\nWarm regards,\nSales Team\nArthoVista`);
     setActiveActionModal('email');
   };
 
@@ -453,87 +505,48 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
   // STAGE THEME DEFINITIONS: Unified styling across parent pipeline & sub-pipeline
   const STAGE_THEMES: Record<string, {
     name: string;
-    chipLabel: string;
     activeCard: string;
     activeBadge: string;
     inactiveBadge: string;
     subActiveCard: string;
     subInactiveHover: string;
     buttonClass: string;
-    accentBorder: string;
-    accentText: string;
   }> = {
     all: {
-      name: 'All Leads',
-      chipLabel: 'Status Filter',
+      name: 'Leads',
       activeCard: 'btn-blue-45 text-white border-blue-500 shadow-md shadow-blue-500/30 ring-2 ring-blue-400/40',
       activeBadge: 'bg-white/20 text-white backdrop-blur-xs border border-white/25',
       inactiveBadge: 'bg-slate-200/60 dark:bg-dark-700 text-slate-700 dark:text-slate-300 border border-slate-300/40 dark:border-dark-600/50',
       subActiveCard: 'btn-blue-45 text-white shadow-xs ring-1 ring-blue-400/30',
       subInactiveHover: 'hover:border-blue-400/60 dark:hover:border-blue-700 hover:text-blue-600 dark:hover:text-blue-400',
-      buttonClass: 'btn-blue-45 text-white shadow-md',
-      accentBorder: 'border-blue-300 dark:border-blue-800',
-      accentText: 'text-blue-600 dark:text-blue-400'
-    },
-    today: {
-      name: 'New Leads',
-      chipLabel: 'New Filter',
-      activeCard: 'btn-orange-45 text-white border-orange-500 shadow-md shadow-orange-500/30 ring-2 ring-orange-400/40',
-      activeBadge: 'bg-white/20 text-white backdrop-blur-xs border border-white/25',
-      inactiveBadge: 'bg-slate-200/60 dark:bg-dark-700 text-slate-700 dark:text-slate-300 border border-slate-300/40 dark:border-dark-600/50',
-      subActiveCard: 'btn-orange-45 text-white shadow-xs ring-1 ring-orange-400/30',
-      subInactiveHover: 'hover:border-orange-400/60 dark:hover:border-orange-700 hover:text-orange-600 dark:hover:text-orange-400',
-      buttonClass: 'btn-orange-45 text-white shadow-md',
-      accentBorder: 'border-orange-300 dark:border-orange-800',
-      accentText: 'text-orange-600 dark:text-orange-400'
-    },
-    open: {
-      name: 'Open Leads',
-      chipLabel: 'Open Sub-Stages',
-      activeCard: 'bg-gradient-to-br from-amber-500 to-amber-600 text-white border-amber-500 shadow-md shadow-amber-500/30 ring-2 ring-amber-400/40',
-      activeBadge: 'bg-white/20 text-white backdrop-blur-xs border border-white/25',
-      inactiveBadge: 'bg-slate-200/60 dark:bg-dark-700 text-slate-700 dark:text-slate-300 border border-slate-300/40 dark:border-dark-600/50',
-      subActiveCard: 'bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-xs ring-1 ring-amber-400/30',
-      subInactiveHover: 'hover:border-amber-400/60 dark:hover:border-amber-700 hover:text-amber-600 dark:hover:text-amber-400',
-      buttonClass: 'bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-500/20',
-      accentBorder: 'border-amber-300 dark:border-amber-800',
-      accentText: 'text-amber-600 dark:text-amber-400'
+      buttonClass: 'btn-blue-45 text-white shadow-md'
     },
     followup: {
       name: 'Follow-Up',
-      chipLabel: 'Outreach Stage',
       activeCard: 'btn-blue-45 text-white border-blue-500 shadow-md shadow-blue-500/30 ring-2 ring-blue-400/40',
       activeBadge: 'bg-white/20 text-white backdrop-blur-xs border border-white/25',
       inactiveBadge: 'bg-slate-200/60 dark:bg-dark-700 text-slate-700 dark:text-slate-300 border border-slate-300/40 dark:border-dark-600/50',
       subActiveCard: 'btn-blue-45 text-white shadow-xs ring-1 ring-blue-400/30',
       subInactiveHover: 'hover:border-blue-400/60 dark:hover:border-blue-700 hover:text-blue-600 dark:hover:text-blue-400',
-      buttonClass: 'btn-blue-45 text-white shadow-md',
-      accentBorder: 'border-blue-300 dark:border-blue-800',
-      accentText: 'text-blue-600 dark:text-blue-400'
+      buttonClass: 'btn-blue-45 text-white shadow-md'
     },
     converted: {
       name: 'Converted',
-      chipLabel: 'Converted Stages',
       activeCard: 'btn-green-45 text-white border-emerald-500 shadow-md shadow-emerald-500/30 ring-2 ring-emerald-400/40',
       activeBadge: 'bg-white/20 text-white backdrop-blur-xs border border-white/25',
       inactiveBadge: 'bg-slate-200/60 dark:bg-dark-700 text-slate-700 dark:text-slate-300 border border-slate-300/40 dark:border-dark-600/50',
       subActiveCard: 'btn-green-45 text-white shadow-xs ring-1 ring-emerald-400/30',
       subInactiveHover: 'hover:border-emerald-400/60 dark:hover:border-emerald-700 hover:text-emerald-600 dark:hover:text-emerald-400',
-      buttonClass: 'btn-green-45 text-white shadow-md',
-      accentBorder: 'border-emerald-300 dark:border-emerald-800',
-      accentText: 'text-emerald-600 dark:text-emerald-400'
+      buttonClass: 'btn-green-45 text-white shadow-md'
     },
     lost: {
       name: 'Lost Leads',
-      chipLabel: 'Lost Reasons',
       activeCard: 'bg-gradient-to-br from-rose-500 to-rose-700 text-white border-rose-500 shadow-md shadow-rose-500/30 ring-2 ring-rose-400/40',
       activeBadge: 'bg-white/20 text-white backdrop-blur-xs border border-white/25',
       inactiveBadge: 'bg-slate-200/60 dark:bg-dark-700 text-slate-700 dark:text-slate-300 border border-slate-300/40 dark:border-dark-600/50',
       subActiveCard: 'bg-gradient-to-br from-rose-500 to-rose-700 text-white shadow-xs ring-1 ring-rose-400/30',
       subInactiveHover: 'hover:border-rose-400/60 dark:hover:border-rose-700 hover:text-rose-600 dark:hover:text-rose-400',
-      buttonClass: 'bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-500/20',
-      accentBorder: 'border-rose-300 dark:border-rose-800',
-      accentText: 'text-rose-600 dark:text-rose-400'
+      buttonClass: 'bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-500/20'
     }
   };
 
@@ -553,23 +566,16 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
 
   const followupTotalCount = followupsBadgeResponse?.stats?.total ?? followupsBadgeResponse?.data?.length ?? 0;
 
-  const currentTheme = STAGE_THEMES[currentMode] || STAGE_THEMES.all;
+  const currentTheme = isLeadsMode ? STAGE_THEMES.all : (STAGE_THEMES[currentMode] || STAGE_THEMES.all);
 
-  const currentTotal =
-    currentMode === 'today' ? (counts.today ?? 0) :
-      currentMode === 'open' ? (counts.open ?? 0) :
-        currentMode === 'converted' ? (counts.converted ?? 0) :
-          currentMode === 'lost' ? (counts.lost ?? 0) : (counts.all ?? 0);
 
-  const unassignedCount = counts.unassigned ?? 0;
-  const assignedCount = Math.max(0, currentTotal - (currentMode === 'all' ? unassignedCount : 0));
-  const highPriorityCount = leads.filter((l: any) => l.priority === 'High' || l.priority === 'Urgent').length;
+
+
 
   const subStageCounts: Record<string, number> = counts.subStages || {
     'In Process': 0,
     'Qualified': 0,
-    'Proposal Sent': 0,
-    'Negotiation': 0
+    'Proposal Sent': 0
   };
 
   const lostReasonCounts: Record<string, number> = counts.lostReasons || {
@@ -581,630 +587,437 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
   };
 
   const convertedStageCounts: Record<string, number> = counts.convertedStages || {
-    'Quotation Won': 0,
-    'Invoiced': 0,
     'Direct Won': 0,
-    'High Value': 0
+    'Quotation Won': 0,
+    'Invoiced': 0
   };
 
   const filteredLeads = leads.filter((lead: any) => {
-    if (currentMode === 'open') {
-      if (subFilter !== 'all') {
-        const leadStage = lead.leadType || 'In Process';
-        if (leadStage.toLowerCase() !== subFilter.toLowerCase()) return false;
+    const st = String(lead.status || '').toLowerCase();
+    if (isLeadsMode) {
+      if (subFilter === 'all') {
+        return true;
+      }
+      // Exclude Converted and Lost leads from specific active Leads pipeline sub-tabs (New, In Process, Qualified, Proposal Sent)
+      if (st === 'lost' || st === 'converted') {
+        return false;
+      }
+      if (subFilter === 'new' || subFilter === 'today') {
+        const isToday = lead.createdAt && new Date(lead.createdAt).toDateString() === new Date().toDateString();
+        return st === 'new' || isToday;
+      }
+      if (subFilter === 'In Process' || subFilter === 'inprocess') {
+        const leadStage = (lead.leadType || (['open', 'contacted'].includes(st) ? 'In Process' : '')).toLowerCase().replace(/[_\s]/g, '');
+        return leadStage === 'inprocess';
+      }
+      if (subFilter === 'Qualified') {
+        const leadStage = (lead.leadType || st).toLowerCase().replace(/[_\s]/g, '');
+        return leadStage === 'qualified';
+      }
+      if (subFilter === 'Proposal Sent') {
+        const leadStage = (lead.leadType || st).toLowerCase().replace(/[_\s]/g, '');
+        return leadStage === 'proposalsent';
       }
     } else if (currentMode === 'lost') {
+      if (st !== 'lost') return false;
       if (subFilter !== 'all') {
-        const reason = lead.lostReason || 'Other';
-        if (reason.toLowerCase() !== subFilter.toLowerCase()) return false;
+        const reason = (lead.lostReason || 'Other').toLowerCase();
+        if (subFilter.toLowerCase() === 'other') {
+          if (!['other', '', 'null', 'undefined'].includes(reason) && lead.lostReason) return false;
+        } else if (!reason.includes(subFilter.toLowerCase())) {
+          return false;
+        }
       }
     } else if (currentMode === 'converted') {
+      if (st !== 'converted') return false;
       if (subFilter !== 'all') {
+        const hasQuotation = Array.isArray(lead.convertedQuotationId)
+          ? lead.convertedQuotationId.length > 0
+          : Boolean(lead.convertedQuotationId);
+        const hasInvoice = Array.isArray(lead.convertedInvoiceId)
+          ? lead.convertedInvoiceId.length > 0
+          : Boolean(lead.convertedInvoiceId);
+
+        const lt = (lead.leadType || '').toLowerCase();
         if (subFilter === 'Quotation Won') {
-          const match = lead.convertedQuotationId || lead.leadType === 'Quotation Won';
+          const match = hasQuotation || lt === 'quotation won' || lt.includes('quotation');
           if (!match) return false;
         } else if (subFilter === 'Invoiced') {
-          const match = lead.convertedInvoiceId || lead.leadType === 'Invoiced' || lead.leadType === 'Invoiced & Billed';
+          const match = hasInvoice || lt.includes('invoiced') || lt.includes('billed');
           if (!match) return false;
-        } else if (subFilter === 'High Value') {
-          const isHighVal = (lead.expectedValue && lead.expectedValue >= 25000) || ['high', 'urgent', 'High', 'Urgent'].includes(lead.priority);
-          if (!isHighVal) return false;
         } else if (subFilter === 'Direct Won') {
-          const isDirect = !lead.convertedQuotationId && !lead.convertedInvoiceId && (!lead.leadType || lead.leadType === 'Direct Won' || lead.leadType === '');
+          const isDirect = !hasQuotation && !hasInvoice && (!lead.leadType || lt === 'direct won' || lt.includes('direct') || lt.includes('payment') || lt === 'won');
           if (!isDirect) return false;
         }
       }
-    } else {
-      if (subFilter === 'assigned' && !lead.assignedTo) return false;
-      if (subFilter === 'unassigned' && lead.assignedTo) return false;
-      if (subFilter === 'high_priority' && lead.priority !== 'High' && lead.priority !== 'Urgent') return false;
     }
     return true;
   });
 
   return (
-    <div className="max-w-7xl mx-auto space-y-5">
+    <div className="w-full space-y-5">
       {/* 1. PIPELINE LIFECYCLE FUNNEL & SEGMENTED CONTROLS */}
       <div className="bg-white/95 dark:bg-dark-900/90 border border-slate-200/80 dark:border-dark-800 rounded-2xl shadow-sm overflow-hidden backdrop-blur-xs">
-        {/* Sleek 45-degree Brand Gradient Accent Line on Top */}
-        <div className="h-[2px] w-full brand-tri-45" />
-
         <div className="p-3 sm:p-4 space-y-3.5">
-          {/* Pipeline Context Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pb-0.5">
-            <div className="flex items-center space-x-2">
-              <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                <GitBranch className="h-3 w-3" />
-                <span>Lifecycle Pipeline</span>
-              </span>
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 hidden sm:inline">
-                Active View: <strong className="text-slate-800 dark:text-slate-200">{currentTheme.name}</strong>
-              </span>
-            </div>
-            <div className="flex items-center space-x-3 text-xs text-slate-500 dark:text-slate-400">
-              <span className="flex items-center space-x-1.5">
-                <span>Total Funnel Leads:</span>
-                <span className="font-extrabold text-slate-900 dark:text-white bg-slate-100 dark:bg-dark-800 px-2 py-0.5 rounded-md border border-slate-200/80 dark:border-dark-700">
-                  {counts.all ?? 0}
-                </span>
-              </span>
-            </div>
-          </div>
 
-          {/* Row 1: Pipeline Stage Tabs (Full-width 6-col grid) */}
-          <div className="w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-2.5">
-            {/* All Leads */}
+          {/* Row 1: Pipeline Stage Tabs (Merged 4-tab grid: Leads, Follow-Up, Converted, Lost Leads) */}
+          <div className="w-full grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-2 sm:gap-2.5">
+            {/* 1. Leads (Merged from My Leads, New Leads & Open Leads) */}
             <Link
               to="/crm/leads"
-              className={`group relative flex items-center justify-between p-2.5 sm:px-3 sm:py-2.5 rounded-xl text-xs font-bold transition-colors duration-150 border cursor-pointer ${
-                currentMode === 'all'
-                  ? STAGE_THEMES.all.activeCard
-                  : 'bg-slate-50/70 hover:bg-white dark:bg-dark-800/60 dark:hover:bg-dark-750 text-slate-700 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 hover:border-blue-400/60 dark:hover:border-blue-600/60 hover:text-blue-600 dark:hover:text-blue-400 shadow-2xs'
-              }`}
+              onClick={() => { setSubFilter('all'); setPage(1); }}
+              className={`group relative flex items-center justify-between p-2.5 sm:px-3 sm:py-2.5 rounded-xl text-xs font-bold transition-colors duration-150 border cursor-pointer ${isLeadsMode
+                ? STAGE_THEMES.all.activeCard
+                : 'bg-slate-50/70 hover:bg-white dark:bg-dark-800/60 dark:hover:bg-dark-750 text-slate-700 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 hover:border-blue-400/60 dark:hover:border-blue-600/60 hover:text-blue-600 dark:hover:text-blue-400 shadow-2xs'
+                }`}
             >
               <div className="flex items-center space-x-2 truncate">
-                <Users className={`h-4 w-4 shrink-0 transition-colors ${currentMode === 'all' ? 'text-white' : 'text-blue-500 group-hover:scale-110'}`} />
-                <span className="truncate">{isPrivileged ? 'All Leads' : 'My Leads'}</span>
+                <Users className={`h-4 w-4 shrink-0 transition-colors ${isLeadsMode ? 'text-white' : 'text-blue-500 group-hover:scale-110'}`} />
+                <span className="truncate">Leads</span>
               </div>
-              <span className={`px-2 py-0.5 rounded-full text-xs font-black shrink-0 ml-1.5 transition-colors ${
-                currentMode === 'all' ? STAGE_THEMES.all.activeBadge : STAGE_THEMES.all.inactiveBadge
-              }`}>
-                {counts.all}
+              <span className={`px-2 py-0.5 rounded-full text-xs font-black shrink-0 ml-1.5 transition-colors ${isLeadsMode ? STAGE_THEMES.all.activeBadge : STAGE_THEMES.all.inactiveBadge
+                }`}>
+                {counts.all ?? 0}
               </span>
             </Link>
 
-            {/* New Leads */}
-            <Link
-              to="/crm/today-leads"
-              className={`group relative flex items-center justify-between p-2.5 sm:px-3 sm:py-2.5 rounded-xl text-xs font-bold transition-colors duration-150 border cursor-pointer ${
-                currentMode === 'today'
-                  ? STAGE_THEMES.today.activeCard
-                  : 'bg-slate-50/70 hover:bg-white dark:bg-dark-800/60 dark:hover:bg-dark-750 text-slate-700 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 hover:border-orange-400/60 dark:hover:border-orange-600/60 hover:text-orange-600 dark:hover:text-orange-400 shadow-2xs'
-              }`}
-            >
-              <div className="flex items-center space-x-2 truncate">
-                <Sparkles className={`h-4 w-4 shrink-0 transition-colors ${currentMode === 'today' ? 'text-white' : 'text-[#fe7c02] group-hover:scale-110'}`} />
-                <span className="truncate">New Leads</span>
-              </div>
-              <span className={`px-2 py-0.5 rounded-full text-xs font-black shrink-0 ml-1.5 transition-colors ${
-                currentMode === 'today' ? STAGE_THEMES.today.activeBadge : STAGE_THEMES.today.inactiveBadge
-              }`}>
-                {counts.today ?? 0}
-              </span>
-            </Link>
-
-            {/* Open Leads */}
-            <Link
-              to="/crm/open-leads"
-              className={`group relative flex items-center justify-between p-2.5 sm:px-3 sm:py-2.5 rounded-xl text-xs font-bold transition-colors duration-150 border cursor-pointer ${
-                currentMode === 'open'
-                  ? STAGE_THEMES.open.activeCard
-                  : 'bg-slate-50/70 hover:bg-white dark:bg-dark-800/60 dark:hover:bg-dark-750 text-slate-700 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 hover:border-amber-400/60 dark:hover:border-amber-600/60 hover:text-amber-600 dark:hover:text-amber-400 shadow-2xs'
-              }`}
-            >
-              <div className="flex items-center space-x-2 truncate">
-                <Flame className={`h-4 w-4 shrink-0 transition-colors ${currentMode === 'open' ? 'text-white' : 'text-amber-500 group-hover:scale-110'}`} />
-                <span className="truncate">Open Leads</span>
-              </div>
-              <span className={`px-2 py-0.5 rounded-full text-xs font-black shrink-0 ml-1.5 transition-colors ${
-                currentMode === 'open' ? STAGE_THEMES.open.activeBadge : STAGE_THEMES.open.inactiveBadge
-              }`}>
-                {counts.open}
-              </span>
-            </Link>
-
-            {/* Follow-Up */}
+            {/* 2. Follow-Up */}
             <Link
               to="/crm/followups"
-              className={`group relative flex items-center justify-between p-2.5 sm:px-3 sm:py-2.5 rounded-xl text-xs font-bold transition-colors duration-150 border cursor-pointer ${
-                currentMode === 'followup'
-                  ? STAGE_THEMES.followup.activeCard
-                  : 'bg-slate-50/70 hover:bg-white dark:bg-dark-800/60 dark:hover:bg-dark-750 text-slate-700 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 hover:border-blue-400/60 dark:hover:border-blue-600/60 hover:text-blue-600 dark:hover:text-blue-400 shadow-2xs'
-              }`}
+              className={`group relative flex items-center justify-between p-2.5 sm:px-3 sm:py-2.5 rounded-xl text-xs font-bold transition-colors duration-150 border cursor-pointer ${currentMode === 'followup'
+                ? STAGE_THEMES.followup.activeCard
+                : 'bg-slate-50/70 hover:bg-white dark:bg-dark-800/60 dark:hover:bg-dark-750 text-slate-700 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 hover:border-blue-400/60 dark:hover:border-blue-600/60 hover:text-blue-600 dark:hover:text-blue-400 shadow-2xs'
+                }`}
             >
               <div className="flex items-center space-x-2 truncate">
                 <Clock className={`h-4 w-4 shrink-0 transition-colors ${currentMode === 'followup' ? 'text-white' : 'text-blue-500 group-hover:scale-110'}`} />
                 <span className="truncate">Follow-Up</span>
               </div>
-              <span className={`px-2 py-0.5 rounded-full text-xs font-black shrink-0 ml-1.5 transition-colors ${
-                currentMode === 'followup' ? STAGE_THEMES.followup.activeBadge : STAGE_THEMES.followup.inactiveBadge
-              }`}>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-black shrink-0 ml-1.5 transition-colors ${currentMode === 'followup' ? STAGE_THEMES.followup.activeBadge : STAGE_THEMES.followup.inactiveBadge
+                }`}>
                 {followupTotalCount}
               </span>
             </Link>
 
-            {/* Converted */}
+            {/* 3. Converted */}
             <Link
               to="/crm/converted-leads"
-              className={`group relative flex items-center justify-between p-2.5 sm:px-3 sm:py-2.5 rounded-xl text-xs font-bold transition-colors duration-150 border cursor-pointer ${
-                currentMode === 'converted'
-                  ? STAGE_THEMES.converted.activeCard
-                  : 'bg-slate-50/70 hover:bg-white dark:bg-dark-800/60 dark:hover:bg-dark-750 text-slate-700 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 hover:border-emerald-400/60 dark:hover:border-emerald-600/60 hover:text-emerald-600 dark:hover:text-emerald-400 shadow-2xs'
-              }`}
+              className={`group relative flex items-center justify-between p-2.5 sm:px-3 sm:py-2.5 rounded-xl text-xs font-bold transition-colors duration-150 border cursor-pointer ${currentMode === 'converted'
+                ? STAGE_THEMES.converted.activeCard
+                : 'bg-slate-50/70 hover:bg-white dark:bg-dark-800/60 dark:hover:bg-dark-750 text-slate-700 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 hover:border-emerald-400/60 dark:hover:border-emerald-600/60 hover:text-emerald-600 dark:hover:text-emerald-400 shadow-2xs'
+                }`}
             >
               <div className="flex items-center space-x-2 truncate">
                 <Trophy className={`h-4 w-4 shrink-0 transition-colors ${currentMode === 'converted' ? 'text-white' : 'text-[#028825] group-hover:scale-110'}`} />
                 <span className="truncate">Converted</span>
               </div>
-              <span className={`px-2 py-0.5 rounded-full text-xs font-black shrink-0 ml-1.5 transition-colors ${
-                currentMode === 'converted' ? STAGE_THEMES.converted.activeBadge : STAGE_THEMES.converted.inactiveBadge
-              }`}>
-                {counts.converted}
+              <span className={`px-2 py-0.5 rounded-full text-xs font-black shrink-0 ml-1.5 transition-colors ${currentMode === 'converted' ? STAGE_THEMES.converted.activeBadge : STAGE_THEMES.converted.inactiveBadge
+                }`}>
+                {counts.converted ?? 0}
               </span>
             </Link>
 
-            {/* Lost Leads */}
+            {/* 4. Lost Leads */}
             <Link
               to="/crm/lost-leads"
-              className={`group relative flex items-center justify-between p-2.5 sm:px-3 sm:py-2.5 rounded-xl text-xs font-bold transition-colors duration-150 border cursor-pointer ${
-                currentMode === 'lost'
-                  ? STAGE_THEMES.lost.activeCard
-                  : 'bg-slate-50/70 hover:bg-white dark:bg-dark-800/60 dark:hover:bg-dark-750 text-slate-700 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 hover:border-rose-400/60 dark:hover:border-rose-600/60 hover:text-rose-600 dark:hover:text-rose-400 shadow-2xs'
-              }`}
+              className={`group relative flex items-center justify-between p-2.5 sm:px-3 sm:py-2.5 rounded-xl text-xs font-bold transition-colors duration-150 border cursor-pointer ${currentMode === 'lost'
+                ? STAGE_THEMES.lost.activeCard
+                : 'bg-slate-50/70 hover:bg-white dark:bg-dark-800/60 dark:hover:bg-dark-750 text-slate-700 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 hover:border-rose-400/60 dark:hover:border-rose-600/60 hover:text-rose-600 dark:hover:text-rose-400 shadow-2xs'
+                }`}
             >
               <div className="flex items-center space-x-2 truncate">
                 <XCircle className={`h-4 w-4 shrink-0 transition-colors ${currentMode === 'lost' ? 'text-white' : 'text-rose-500 group-hover:scale-110'}`} />
                 <span className="truncate">Lost Leads</span>
               </div>
-              <span className={`px-2 py-0.5 rounded-full text-xs font-black shrink-0 ml-1.5 transition-colors ${
-                currentMode === 'lost' ? STAGE_THEMES.lost.activeBadge : STAGE_THEMES.lost.inactiveBadge
-              }`}>
-                {counts.lost}
+              <span className={`px-2 py-0.5 rounded-full text-xs font-black shrink-0 ml-1.5 transition-colors ${currentMode === 'lost' ? STAGE_THEMES.lost.activeBadge : STAGE_THEMES.lost.inactiveBadge
+                }`}>
+                {counts.lost ?? 0}
               </span>
             </Link>
           </div>
 
           {/* Row 2: Sub-Pipeline / Filter Stage Strip */}
           <div className="pt-2 border-t border-slate-100 dark:border-dark-800/80">
-            <div className="bg-slate-50/80 dark:bg-dark-950/70 rounded-xl p-2 sm:p-2.5 border border-slate-200/70 dark:border-dark-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-              <div className="flex items-center space-x-2 shrink-0">
-                <div className="flex items-center space-x-1.5 text-xs font-bold text-slate-600 dark:text-slate-300">
-                  <Filter className="h-3.5 w-3.5 text-blue-500" />
-                  <span className="uppercase text-[11px] tracking-wider text-slate-500 dark:text-slate-400">
-                    {currentMode === 'open' ? 'Sub-Stages:' :
-                     currentMode === 'converted' ? 'Fulfillment:' :
-                     currentMode === 'lost' ? 'Reason Filter:' : 'Quick Views:'}
-                  </span>
+            <div className="w-full">
+              {isLeadsMode ? (
+                <div className="w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                  {/* 1. All Leads */}
+                  <button
+                    type="button"
+                    onClick={() => { setSubFilter('all'); setPage(1); }}
+                    className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${subFilter === 'all'
+                      ? currentTheme.subActiveCard
+                      : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
+                      }`}
+                  >
+                    <div className="flex items-center space-x-1.5 truncate">
+                      <Users className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">All Leads</span>
+                    </div>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${subFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
+                      }`}>
+                      {counts.all ?? 0}
+                    </span>
+                  </button>
+
+                  {/* 2. New Leads */}
+                  <button
+                    type="button"
+                    onClick={() => { setSubFilter('new'); setPage(1); }}
+                    className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${subFilter === 'new' || subFilter === 'today'
+                      ? currentTheme.subActiveCard
+                      : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
+                      }`}
+                  >
+                    <div className="flex items-center space-x-1.5 truncate">
+                      <Sparkles className="h-3.5 w-3.5 shrink-0 text-[#fe7c02]" />
+                      <span className="truncate">New Leads</span>
+                    </div>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${subFilter === 'new' || subFilter === 'today' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
+                      }`}>
+                      {counts.today ?? 0}
+                    </span>
+                  </button>
+
+                  {/* 3. In Process */}
+                  <button
+                    type="button"
+                    onClick={() => { setSubFilter('In Process'); setPage(1); }}
+                    className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${subFilter === 'In Process' || subFilter === 'inprocess'
+                      ? currentTheme.subActiveCard
+                      : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
+                      }`}
+                  >
+                    <div className="flex items-center space-x-1.5 truncate">
+                      <Zap className="h-3.5 w-3.5 shrink-0 fill-current text-amber-500" />
+                      <span className="truncate">In Process</span>
+                    </div>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${subFilter === 'In Process' || subFilter === 'inprocess' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
+                      }`}>
+                      {subStageCounts['In Process'] ?? 0}
+                    </span>
+                  </button>
+
+                  {/* 4. Qualified */}
+                  <button
+                    type="button"
+                    onClick={() => { setSubFilter('Qualified'); setPage(1); }}
+                    className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${subFilter === 'Qualified'
+                      ? currentTheme.subActiveCard
+                      : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
+                      }`}
+                  >
+                    <div className="flex items-center space-x-1.5 truncate">
+                      <Target className="h-3.5 w-3.5 shrink-0 text-blue-500" />
+                      <span className="truncate">Qualified</span>
+                    </div>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${subFilter === 'Qualified' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
+                      }`}>
+                      {subStageCounts['Qualified'] ?? 0}
+                    </span>
+                  </button>
+
+                  {/* 5. Proposal Sent */}
+                  <button
+                    type="button"
+                    onClick={() => { setSubFilter('Proposal Sent'); setPage(1); }}
+                    className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${subFilter === 'Proposal Sent'
+                      ? currentTheme.subActiveCard
+                      : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
+                      }`}
+                  >
+                    <div className="flex items-center space-x-1.5 truncate">
+                      <Send className="h-3.5 w-3.5 shrink-0 text-purple-500" />
+                      <span className="truncate">Proposal Sent</span>
+                    </div>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${subFilter === 'Proposal Sent' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
+                      }`}>
+                      {subStageCounts['Proposal Sent'] ?? 0}
+                    </span>
+                  </button>
                 </div>
-              </div>
+              ) : currentMode === 'converted' ? (
+                <div className="w-full grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-2">
+                  {/* 1. All Converted */}
+                  <button
+                    type="button"
+                    onClick={() => { setSubFilter('all'); setPage(1); }}
+                    className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${subFilter === 'all'
+                      ? currentTheme.subActiveCard
+                      : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
+                      }`}
+                  >
+                    <div className="flex items-center space-x-1.5 truncate">
+                      <Trophy className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">All Converted</span>
+                    </div>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${subFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
+                      }`}>
+                      {counts.converted ?? 0}
+                    </span>
+                  </button>
 
-              <div className="w-full">
-                {currentMode === 'open' ? (
-                  <div className="w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-                    {/* All Open */}
-                    <button
-                      type="button"
-                      onClick={() => { setSubFilter('all'); setPage(1); }}
-                      className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                        subFilter === 'all'
-                          ? currentTheme.subActiveCard
-                          : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
+                  {/* 2. Direct Won */}
+                  <button
+                    type="button"
+                    onClick={() => { setSubFilter('Direct Won'); setPage(1); }}
+                    className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${subFilter === 'Direct Won'
+                      ? currentTheme.subActiveCard
+                      : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
                       }`}
-                    >
-                      <div className="flex items-center space-x-1.5 truncate">
-                        <Flame className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">All Open</span>
-                      </div>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                        subFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
+                  >
+                    <div className="flex items-center space-x-1.5 truncate">
+                      <Zap className="h-3.5 w-3.5 shrink-0 fill-current" />
+                      <span className="truncate">Direct Won</span>
+                    </div>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${subFilter === 'Direct Won' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
                       }`}>
-                        {counts.open ?? 0}
-                      </span>
-                    </button>
+                      {convertedStageCounts['Direct Won'] ?? 0}
+                    </span>
+                  </button>
 
-                    {/* In Process */}
-                    <button
-                      type="button"
-                      onClick={() => { setSubFilter('In Process'); setPage(1); }}
-                      className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                        subFilter === 'In Process'
-                          ? currentTheme.subActiveCard
-                          : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
+                  {/* 3. Quotation Won */}
+                  <button
+                    type="button"
+                    onClick={() => { setSubFilter('Quotation Won'); setPage(1); }}
+                    className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${subFilter === 'Quotation Won'
+                      ? currentTheme.subActiveCard
+                      : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
                       }`}
-                    >
-                      <div className="flex items-center space-x-1.5 truncate">
-                        <Zap className="h-3.5 w-3.5 shrink-0 fill-current" />
-                        <span className="truncate">In Process</span>
-                      </div>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                        subFilter === 'In Process' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
+                  >
+                    <div className="flex items-center space-x-1.5 truncate">
+                      <FileText className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">Quotation Won</span>
+                    </div>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${subFilter === 'Quotation Won' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
                       }`}>
-                        {subStageCounts['In Process'] ?? 0}
-                      </span>
-                    </button>
+                      {convertedStageCounts['Quotation Won'] ?? 0}
+                    </span>
+                  </button>
 
-                    {/* Qualified */}
-                    <button
-                      type="button"
-                      onClick={() => { setSubFilter('Qualified'); setPage(1); }}
-                      className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                        subFilter === 'Qualified'
-                          ? currentTheme.subActiveCard
-                          : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
+                  {/* 4. Invoiced */}
+                  <button
+                    type="button"
+                    onClick={() => { setSubFilter('Invoiced'); setPage(1); }}
+                    className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${subFilter === 'Invoiced'
+                      ? currentTheme.subActiveCard
+                      : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
                       }`}
-                    >
-                      <div className="flex items-center space-x-1.5 truncate">
-                        <Target className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">Qualified</span>
-                      </div>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                        subFilter === 'Qualified' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
+                  >
+                    <div className="flex items-center space-x-1.5 truncate">
+                      <Receipt className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">Invoiced</span>
+                    </div>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${subFilter === 'Invoiced' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
                       }`}>
-                        {subStageCounts['Qualified'] ?? 0}
-                      </span>
-                    </button>
+                      {convertedStageCounts['Invoiced'] ?? 0}
+                    </span>
+                  </button>
+                </div>
+              ) : currentMode === 'lost' ? (
+                <div className="w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                  {/* All Lost */}
+                  <button
+                    type="button"
+                    onClick={() => { setSubFilter('all'); setPage(1); }}
+                    className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${subFilter === 'all'
+                      ? currentTheme.subActiveCard
+                      : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
+                      }`}
+                  >
+                    <div className="flex items-center space-x-1.5 truncate">
+                      <XCircle className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">All Lost</span>
+                    </div>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${subFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
+                      }`}>
+                      {counts.lost ?? 0}
+                    </span>
+                  </button>
 
-                    {/* Proposal Sent */}
-                    <button
-                      type="button"
-                      onClick={() => { setSubFilter('Proposal Sent'); setPage(1); }}
-                      className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                        subFilter === 'Proposal Sent'
-                          ? currentTheme.subActiveCard
-                          : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
+                  {/* Price Constraint */}
+                  <button
+                    type="button"
+                    onClick={() => { setSubFilter('Price'); setPage(1); }}
+                    className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${subFilter === 'Price'
+                      ? currentTheme.subActiveCard
+                      : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
                       }`}
-                    >
-                      <div className="flex items-center space-x-1.5 truncate">
-                        <Send className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">Proposal Sent</span>
-                      </div>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                        subFilter === 'Proposal Sent' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
+                  >
+                    <span className="truncate">💰 Price</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${subFilter === 'Price' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
                       }`}>
-                        {subStageCounts['Proposal Sent'] ?? 0}
-                      </span>
-                    </button>
+                      {lostReasonCounts['Price'] ?? 0}
+                    </span>
+                  </button>
 
-                    {/* Negotiation */}
-                    <button
-                      type="button"
-                      onClick={() => { setSubFilter('Negotiation'); setPage(1); }}
-                      className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                        subFilter === 'Negotiation'
-                          ? currentTheme.subActiveCard
-                          : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
+                  {/* No Response */}
+                  <button
+                    type="button"
+                    onClick={() => { setSubFilter('No Response'); setPage(1); }}
+                    className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${subFilter === 'No Response'
+                      ? currentTheme.subActiveCard
+                      : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
                       }`}
-                    >
-                      <div className="flex items-center space-x-1.5 truncate">
-                        <Handshake className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">Negotiation</span>
-                      </div>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                        subFilter === 'Negotiation' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
+                  >
+                    <span className="truncate">📵 No Response</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${subFilter === 'No Response' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
                       }`}>
-                        {subStageCounts['Negotiation'] ?? 0}
-                      </span>
-                    </button>
-                  </div>
-                ) : currentMode === 'converted' ? (
-                  <div className="w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-                    {/* All Converted */}
-                    <button
-                      type="button"
-                      onClick={() => { setSubFilter('all'); setPage(1); }}
-                      className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                        subFilter === 'all'
-                          ? currentTheme.subActiveCard
-                          : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
-                      }`}
-                    >
-                      <div className="flex items-center space-x-1.5 truncate">
-                        <Trophy className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">All Converted</span>
-                      </div>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                        subFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
-                      }`}>
-                        {counts.converted ?? 0}
-                      </span>
-                    </button>
+                      {lostReasonCounts['No Response'] ?? 0}
+                    </span>
+                  </button>
 
-                    {/* Quotation Won */}
-                    <button
-                      type="button"
-                      onClick={() => { setSubFilter('Quotation Won'); setPage(1); }}
-                      className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                        subFilter === 'Quotation Won'
-                          ? currentTheme.subActiveCard
-                          : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
+                  {/* Competitor */}
+                  <button
+                    type="button"
+                    onClick={() => { setSubFilter('Competitor'); setPage(1); }}
+                    className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${subFilter === 'Competitor'
+                      ? currentTheme.subActiveCard
+                      : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
                       }`}
-                    >
-                      <div className="flex items-center space-x-1.5 truncate">
-                        <FileText className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">Quotation Won</span>
-                      </div>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                        subFilter === 'Quotation Won' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
+                  >
+                    <span className="truncate">⚔️ Competitor</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${subFilter === 'Competitor' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
                       }`}>
-                        {convertedStageCounts['Quotation Won'] ?? 0}
-                      </span>
-                    </button>
+                      {lostReasonCounts['Competitor'] ?? 0}
+                    </span>
+                  </button>
 
-                    {/* Invoiced & Billed */}
-                    <button
-                      type="button"
-                      onClick={() => { setSubFilter('Invoiced'); setPage(1); }}
-                      className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                        subFilter === 'Invoiced'
-                          ? currentTheme.subActiveCard
-                          : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
+                  {/* Not Interested */}
+                  <button
+                    type="button"
+                    onClick={() => { setSubFilter('Not Interested'); setPage(1); }}
+                    className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${subFilter === 'Not Interested'
+                      ? currentTheme.subActiveCard
+                      : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
                       }`}
-                    >
-                      <div className="flex items-center space-x-1.5 truncate">
-                        <Receipt className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">Invoiced & Billed</span>
-                      </div>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                        subFilter === 'Invoiced' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
+                  >
+                    <span className="truncate">🚫 Not Interested</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${subFilter === 'Not Interested' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
                       }`}>
-                        {convertedStageCounts['Invoiced'] ?? 0}
-                      </span>
-                    </button>
+                      {lostReasonCounts['Not Interested'] ?? 0}
+                    </span>
+                  </button>
 
-                    {/* Direct Won */}
-                    <button
-                      type="button"
-                      onClick={() => { setSubFilter('Direct Won'); setPage(1); }}
-                      className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                        subFilter === 'Direct Won'
-                          ? currentTheme.subActiveCard
-                          : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
+                  {/* Other */}
+                  <button
+                    type="button"
+                    onClick={() => { setSubFilter('Other'); setPage(1); }}
+                    className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${subFilter === 'Other'
+                      ? currentTheme.subActiveCard
+                      : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
                       }`}
-                    >
-                      <div className="flex items-center space-x-1.5 truncate">
-                        <Zap className="h-3.5 w-3.5 shrink-0 fill-current" />
-                        <span className="truncate">Direct Won</span>
-                      </div>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                        subFilter === 'Direct Won' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
+                  >
+                    <span className="truncate">❓ Other</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${subFilter === 'Other' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
                       }`}>
-                        {convertedStageCounts['Direct Won'] ?? 0}
-                      </span>
-                    </button>
-
-                    {/* High Value Deals */}
-                    <button
-                      type="button"
-                      onClick={() => { setSubFilter('High Value'); setPage(1); }}
-                      className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                        subFilter === 'High Value'
-                          ? currentTheme.subActiveCard
-                          : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
-                      }`}
-                    >
-                      <div className="flex items-center space-x-1.5 truncate">
-                        <Sparkles className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">High Value</span>
-                      </div>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                        subFilter === 'High Value' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
-                      }`}>
-                        {convertedStageCounts['High Value'] ?? 0}
-                      </span>
-                    </button>
-                  </div>
-                ) : currentMode === 'lost' ? (
-                  <div className="w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-                    {/* All Lost */}
-                    <button
-                      type="button"
-                      onClick={() => { setSubFilter('all'); setPage(1); }}
-                      className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                        subFilter === 'all'
-                          ? currentTheme.subActiveCard
-                          : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
-                      }`}
-                    >
-                      <div className="flex items-center space-x-1.5 truncate">
-                        <XCircle className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">All Lost</span>
-                      </div>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                        subFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
-                      }`}>
-                        {counts.lost ?? 0}
-                      </span>
-                    </button>
-
-                    {/* Price Constraint */}
-                    <button
-                      type="button"
-                      onClick={() => { setSubFilter('Price'); setPage(1); }}
-                      className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                        subFilter === 'Price'
-                          ? currentTheme.subActiveCard
-                          : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
-                      }`}
-                    >
-                      <span className="truncate">💰 Price</span>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                        subFilter === 'Price' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
-                      }`}>
-                        {lostReasonCounts['Price'] ?? 0}
-                      </span>
-                    </button>
-
-                    {/* No Response */}
-                    <button
-                      type="button"
-                      onClick={() => { setSubFilter('No Response'); setPage(1); }}
-                      className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                        subFilter === 'No Response'
-                          ? currentTheme.subActiveCard
-                          : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
-                      }`}
-                    >
-                      <span className="truncate">📵 No Response</span>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                        subFilter === 'No Response' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
-                      }`}>
-                        {lostReasonCounts['No Response'] ?? 0}
-                      </span>
-                    </button>
-
-                    {/* Competitor */}
-                    <button
-                      type="button"
-                      onClick={() => { setSubFilter('Competitor'); setPage(1); }}
-                      className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                        subFilter === 'Competitor'
-                          ? currentTheme.subActiveCard
-                          : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
-                      }`}
-                    >
-                      <span className="truncate">⚔️ Competitor</span>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                        subFilter === 'Competitor' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
-                      }`}>
-                        {lostReasonCounts['Competitor'] ?? 0}
-                      </span>
-                    </button>
-
-                    {/* Not Interested */}
-                    <button
-                      type="button"
-                      onClick={() => { setSubFilter('Not Interested'); setPage(1); }}
-                      className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                        subFilter === 'Not Interested'
-                          ? currentTheme.subActiveCard
-                          : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
-                      }`}
-                    >
-                      <span className="truncate">🚫 Not Interested</span>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                        subFilter === 'Not Interested' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
-                      }`}>
-                        {lostReasonCounts['Not Interested'] ?? 0}
-                      </span>
-                    </button>
-
-                    {/* Other */}
-                    <button
-                      type="button"
-                      onClick={() => { setSubFilter('Other'); setPage(1); }}
-                      className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                        subFilter === 'Other'
-                          ? currentTheme.subActiveCard
-                          : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
-                      }`}
-                    >
-                      <span className="truncate">❓ Other</span>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                        subFilter === 'Other' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
-                      }`}>
-                        {lostReasonCounts['Other'] ?? 0}
-                      </span>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="w-full grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {/* Subpipeline: All Overview */}
-                    <button
-                      type="button"
-                      onClick={() => { setSubFilter('all'); setUnassignedOnly(false); setPage(1); }}
-                      className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                        subFilter === 'all'
-                          ? currentTheme.subActiveCard
-                          : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
-                      }`}
-                    >
-                      <div className="flex items-center space-x-1.5 truncate">
-                        <Users className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">All Overview</span>
-                      </div>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                        subFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
-                      }`}>
-                        {currentTotal}
-                      </span>
-                    </button>
-
-                    {/* Subpipeline: Assigned */}
-                    <button
-                      type="button"
-                      onClick={() => { setSubFilter('assigned'); setUnassignedOnly(false); setPage(1); }}
-                      className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                        subFilter === 'assigned'
-                          ? currentTheme.subActiveCard
-                          : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
-                      }`}
-                    >
-                      <div className="flex items-center space-x-1.5 truncate">
-                        <UserCheck className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">Assigned</span>
-                      </div>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                        subFilter === 'assigned' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
-                      }`}>
-                        {assignedCount}
-                      </span>
-                    </button>
-
-                    {/* Subpipeline: Unassigned */}
-                    <button
-                      type="button"
-                      onClick={() => { setSubFilter('unassigned'); setUnassignedOnly(true); setPage(1); }}
-                      className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                        subFilter === 'unassigned'
-                          ? currentTheme.subActiveCard
-                          : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
-                      }`}
-                    >
-                      <div className="flex items-center space-x-1.5 truncate">
-                        <Users className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">Unassigned</span>
-                      </div>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                        subFilter === 'unassigned' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
-                      }`}>
-                        {unassignedCount}
-                      </span>
-                    </button>
-
-                    {/* Subpipeline: High Priority */}
-                    <button
-                      type="button"
-                      onClick={() => { setSubFilter('high_priority'); setUnassignedOnly(false); setPage(1); }}
-                      className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                        subFilter === 'high_priority'
-                          ? currentTheme.subActiveCard
-                          : `bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 ${currentTheme.subInactiveHover}`
-                      }`}
-                    >
-                      <div className="flex items-center space-x-1.5 truncate">
-                        <Clock className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">High Priority</span>
-                      </div>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                        subFilter === 'high_priority' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
-                      }`}>
-                        {highPriorityCount}
-                      </span>
-                    </button>
-                  </div>
-                )}
-              </div>
+                      {lostReasonCounts['Other'] ?? 0}
+                    </span>
+                  </button>
+                </div>
+              ) : null}
             </div>
+
           </div>
         </div>
       </div>
@@ -1277,7 +1090,7 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
 
       {/* 4. Multi-Select Bulk Actions Floating Banner (Admins & Managers only) */}
       {isManager && selectedLeads.length > 0 && (
-        <div className="p-4 rounded-2xl bg-slate-900 text-white flex items-center justify-between shadow-xl animate-fade-in">
+        <div className="p-1 rounded-2xl bg-slate-900 text-white flex items-center justify-between shadow-xl animate-fade-in">
           <div className="flex items-center space-x-3 text-xs font-bold">
             <span className="w-6 h-6 rounded-full bg-gradient-to-br from-[#fe7c02] via-[#0062d1] to-[#028825] flex items-center justify-center text-xs text-white font-black shadow-xs">
               {selectedLeads.length}
@@ -1328,7 +1141,7 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
       )}
 
       {/* 5. Main Leads Table (with Skeleton Loaders) */}
-      <div className="bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-800 rounded-3xl p-6 shadow-sm">
+      <div className="bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-800 rounded-3xl p-3.5 sm:p-5 shadow-sm">
         {isLoading ? (
           /* SKELETON LOADER ROWS */
           <div className="space-y-3">
@@ -1360,89 +1173,134 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
           </div>
         ) : (
           <div className="overflow-x-auto border border-slate-200 dark:border-dark-800 rounded-2xl">
-            <table className="w-full min-w-[820px] text-left text-xs text-slate-600 dark:text-dark-300">
+            <table className="w-full text-left text-xs text-slate-600 dark:text-dark-300">
               <thead className="bg-slate-50 dark:bg-dark-800 text-slate-700 dark:text-white font-bold text-[10px] uppercase tracking-wider border-b border-slate-200/80 dark:border-dark-700">
                 <tr>
-                  <th className="p-3 w-8 whitespace-nowrap">
-                    <input
-                      type="checkbox"
-                      onChange={handleSelectAll}
-                      checked={selectedLeads.length === filteredLeads.length && filteredLeads.length > 0}
-                      className="rounded text-primary-600 outline-none"
-                    />
-                  </th>
-                  <th className="p-3 whitespace-nowrap">LEAD ID</th>
-                  <th className="p-3 whitespace-nowrap">LEAD DETAILS</th>
-                  <th className="p-3 whitespace-nowrap">CONTACT</th>
-                  <th className="p-3 whitespace-nowrap">SOURCE</th>
-                  <th className="p-3 whitespace-nowrap">ASSIGNED TO</th>
-                  <th className="p-3 whitespace-nowrap">STATUS</th>
-                  <th className="p-3 whitespace-nowrap">NEXT FOLLOW-UP</th>
-                  <th className="p-3 text-right whitespace-nowrap">ACTIONS</th>
+                  {isManager && (
+                    <th className="px-3 py-2.5 w-8 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        onChange={handleSelectAll}
+                        checked={selectedLeads.length === filteredLeads.length && filteredLeads.length > 0}
+                        className="rounded text-primary-600 outline-none"
+                      />
+                    </th>
+                  )}
+                  <th className="px-2.5 py-2.5 whitespace-nowrap">LEAD ID</th>
+                  <th className="px-2.5 py-2.5 whitespace-nowrap">LEAD DETAILS</th>
+                  <th className="px-2.5 py-2.5 whitespace-nowrap">CONTACT</th>
+                  <th className="px-2.5 py-2.5 whitespace-nowrap">SOURCE</th>
+                  <th className="px-2.5 py-2.5 whitespace-nowrap">STATUS</th>
+                  {showPaymentColumns && (
+                    <>
+                      <th className="px-2.5 py-2.5 whitespace-nowrap text-amber-600 dark:text-amber-400">PAYMENT EXPECTED</th>
+                      <th className="px-2.5 py-2.5 whitespace-nowrap text-emerald-600 dark:text-emerald-400">COMPLETED</th>
+                      <th className="px-2.5 py-2.5 whitespace-nowrap text-rose-600 dark:text-rose-400">DUE</th>
+                    </>
+                  )}
+                  <th className="px-2.5 py-2.5 whitespace-nowrap">NEXT FOLLOW-UP</th>
+                  <th className={`px-2.5 py-2.5 whitespace-nowrap ${currentMode === 'converted' ? 'text-center w-14' : 'text-right'}`}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-dark-800">
                 {filteredLeads.map((lead: any) => (
                   <tr key={lead._id} className="hover:bg-slate-50/60 dark:hover:bg-dark-800/30 transition">
-                    <td className="p-3 whitespace-nowrap">
-                      <input
-                        type="checkbox"
-                        checked={selectedLeads.includes(lead._id)}
-                        onChange={() => handleToggleSelect(lead._id)}
-                        className="rounded text-primary-600 outline-none"
-                      />
-                    </td>
-                    <td className="p-3 font-mono font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap">
+                    {isManager && (
+                      <td className="px-3 py-2.5 whitespace-nowrap">
+                        <input
+                          type="checkbox"
+                          checked={selectedLeads.includes(lead._id)}
+                          onChange={() => handleToggleSelect(lead._id)}
+                          className="rounded text-primary-600 outline-none"
+                        />
+                      </td>
+                    )}
+                    <td className="px-3 py-2.5 font-mono font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap">
                       <Link to={`/crm/leads/${lead._id}`} className="hover:underline">
                         {lead.leadId}
                       </Link>
                     </td>
-                    <td className="p-3">
+                    <td className="px-3 py-2.5">
                       <div className="flex items-center space-x-2.5">
                         <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-black text-xs flex items-center justify-center shrink-0 border border-blue-200/60 dark:border-blue-800/40">
                           {(lead.name || 'L').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                         </div>
                         <div className="min-w-0">
-                          <Link to={`/crm/leads/${lead._id}`} className="font-bold text-slate-800 dark:text-white hover:text-blue-600 block truncate max-w-[160px]">
+                          <Link to={`/crm/leads/${lead._id}`} className="font-bold text-slate-800 dark:text-white hover:text-blue-600 block truncate max-w-[150px]">
                             {lead.name}
                           </Link>
-                          <span className="text-[11px] text-slate-400 block truncate max-w-[160px]">{lead.company || '—'}</span>
+                          <span className="text-[11px] text-slate-400 block truncate max-w-[150px]">{lead.company || '—'}</span>
                         </div>
                       </div>
                     </td>
-                    <td className="p-3 space-y-0.5 font-mono whitespace-nowrap">
+                    <td className="px-3 py-2.5 space-y-0.5 font-mono whitespace-nowrap">
                       <p className="font-semibold text-slate-700 dark:text-dark-200 text-xs">{lead.phone}</p>
-                      {lead.email && <p className="text-[10px] text-slate-400 truncate max-w-[140px]">{lead.email}</p>}
+                      {lead.email && <p className="text-[10px] text-slate-400 truncate max-w-[130px]">{lead.email}</p>}
                     </td>
-                    <td className="p-3 whitespace-nowrap">
+                    <td className="px-3 py-2.5 whitespace-nowrap">
                       <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-dark-800 font-bold text-[10px] text-slate-600 dark:text-slate-300">
                         {lead.source}
                       </span>
                     </td>
-                    <td className="p-3 whitespace-nowrap">
-                      {lead.assignedTo ? (
-                        <div className="flex items-center space-x-1.5 text-slate-800 dark:text-dark-200 font-medium text-xs">
-                          <div className="w-5 h-5 rounded-full bg-slate-100 dark:bg-dark-700 text-[10px] font-bold flex items-center justify-center text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-dark-600">
-                            {lead.assignedTo.firstName?.[0] || 'U'}
-                          </div>
-                          <span className="truncate max-w-[110px]">{lead.assignedTo.firstName} {lead.assignedTo.lastName}</span>
-                        </div>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200/70 dark:border-amber-900/60 text-amber-700 dark:text-amber-400 font-extrabold text-[10px] tracking-wide uppercase">
-                          UNASSIGNED
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-3 whitespace-nowrap">
+                    <td className="px-3 py-2.5 whitespace-nowrap">
                       <PipelineStatusDropdown
                         leadId={lead._id}
                         currentStatus={lead.status || 'New'}
-                        currentSubStage={lead.leadType || (lead.convertedInvoiceId ? 'Invoiced' : lead.convertedQuotationId ? 'Quotation Won' : undefined)}
+                        currentSubStage={lead.leadType || ((Array.isArray(lead.convertedInvoiceId) ? lead.convertedInvoiceId.length > 0 : Boolean(lead.convertedInvoiceId)) ? 'Invoiced' : (Array.isArray(lead.convertedQuotationId) ? lead.convertedQuotationId.length > 0 : Boolean(lead.convertedQuotationId)) ? 'Quotation Won' : undefined)}
                         currentLostReason={lead.lostReason}
-                        readOnly={true}
+                        paymentExpected={lead.paymentExpected}
+                        paymentReceived={lead.paymentReceived}
+                        paymentDue={lead.paymentDue !== undefined ? Number(lead.paymentDue) : Math.max(0, Number(lead.paymentExpected || 0) - Number(lead.paymentReceived || 0))}
+                        disabled={quickDispatchMutation.isPending}
+                        onSelectStage={({ leadId: lId, status, subStage, lostReason, transitionNotes, paymentExpected, paymentReceived }) => {
+                          quickDispatchMutation.mutate({
+                            leadId: lId || lead._id,
+                            status,
+                            subStage,
+                            lostReason,
+                            transitionNotes,
+                            paymentExpected,
+                            paymentReceived
+                          });
+                        }}
                       />
                     </td>
-                    <td className="p-3 whitespace-nowrap">
+                    {showPaymentColumns && (
+                      <>
+                        <td className="px-3 py-2.5 whitespace-nowrap font-mono font-semibold text-slate-800 dark:text-slate-200">
+                          {lead.paymentExpected !== undefined && lead.paymentExpected !== null && Number(lead.paymentExpected) > 0 ? (
+                            <span>₹{Number(lead.paymentExpected).toLocaleString('en-IN')}</span>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 whitespace-nowrap font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          {lead.paymentReceived !== undefined && lead.paymentReceived !== null && Number(lead.paymentReceived) > 0 ? (
+                            <span>₹{Number(lead.paymentReceived).toLocaleString('en-IN')}</span>
+                          ) : (
+                            <span className="text-slate-400 font-normal">₹0</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 whitespace-nowrap font-mono font-bold">
+                          {(() => {
+                            const expected = Number(lead.paymentExpected || 0);
+                            const received = Number(lead.paymentReceived || 0);
+                            const due = lead.paymentDue !== undefined && lead.paymentDue !== null
+                              ? Number(lead.paymentDue)
+                              : Math.max(0, expected - received);
+                            if (due <= 0 && expected > 0) {
+                              return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">Paid in Full</span>;
+                            }
+                            return due > 0 ? (
+                              <span className="text-rose-600 dark:text-rose-400">₹{due.toLocaleString('en-IN')}</span>
+                            ) : (
+                              <span className="text-slate-400 font-normal">—</span>
+                            );
+                          })()}
+                        </td>
+                      </>
+                    )}
+                    <td className="px-3 py-2.5 whitespace-nowrap">
                       {lead.nextFollowUp ? (
                         <button
                           type="button"
@@ -1467,39 +1325,42 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
                         <span className="text-slate-300 dark:text-dark-600 text-xs font-semibold pl-2">—</span>
                       )}
                     </td>
-                    <td className="p-3 text-right whitespace-nowrap">
-                      <div className="inline-flex items-center justify-end space-x-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenCallModal(lead)}
-                          title="Call Lead & Log Outcome (No Answer, Busy, etc.)"
-                          className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition hover:scale-110 active:scale-95 shadow-xs"
-                        >
-                          <Phone className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenWhatsAppModal(lead)}
-                          title="Send WhatsApp"
-                          className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 hover:bg-emerald-100 transition"
-                        >
-                          <MessageSquare className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEmailModal(lead)}
-                          title="Send Email"
-                          className="p-1.5 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400 hover:bg-blue-100 transition"
-                        >
-                          <Mail className="h-3.5 w-3.5" />
-                        </button>
+                    <td className={`px-2.5 py-2 whitespace-nowrap ${currentMode === 'converted' ? 'text-center' : 'text-right'}`}>
+                      <div className={`inline-flex items-center ${currentMode === 'converted' ? 'justify-center' : 'justify-end'} space-x-1`}>
+                        {currentMode !== 'converted' && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenCallModal(lead)}
+                              title="Call Lead & Log Outcome (No Answer, Busy, etc.)"
+                              className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition hover:scale-105 active:scale-95 shadow-xs"
+                            >
+                              <Phone className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenWhatsAppModal(lead)}
+                              title="Send WhatsApp"
+                              className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 hover:bg-emerald-100 transition hover:scale-105 active:scale-95 shadow-xs"
+                            >
+                              <MessageSquare className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEmailModal(lead)}
+                              title="Send Email"
+                              className="p-1.5 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400 hover:bg-blue-100 transition hover:scale-105 active:scale-95 shadow-xs"
+                            >
+                              <Mail className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        )}
                         <Link
                           to={`/crm/leads/${lead._id}`}
-                          title="View & Audit Lead Details"
-                          className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-dark-800 text-slate-700 dark:text-slate-300 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-950/40 dark:hover:text-blue-400 font-semibold text-[11px] transition"
+                          title="View Lead Details"
+                          className="p-1.5 rounded-lg bg-slate-100 text-slate-600 dark:bg-dark-800 dark:text-slate-300 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-950/40 dark:hover:text-blue-400 transition hover:scale-105 active:scale-95 shadow-xs"
                         >
                           <Eye className="h-3.5 w-3.5" />
-                          <span>View Details</span>
                         </Link>
                       </div>
                     </td>
@@ -2025,8 +1886,8 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
                         setCallNotes(item.desc);
                       }}
                       className={`p-2 rounded-2xl text-left border transition-all text-xs flex flex-col justify-between ${isSelected
-                          ? `${item.color} font-bold ring-2 ring-primary-500/50 shadow-xs scale-[1.02]`
-                          : 'border-slate-200 dark:border-dark-700 text-slate-600 dark:text-dark-300 hover:bg-slate-50 dark:hover:bg-dark-800/80 opacity-80 hover:opacity-100'
+                        ? `${item.color} font-bold ring-2 ring-primary-500/50 shadow-xs scale-[1.02]`
+                        : 'border-slate-200 dark:border-dark-700 text-slate-600 dark:text-dark-300 hover:bg-slate-50 dark:hover:bg-dark-800/80 opacity-80 hover:opacity-100'
                         }`}
                     >
                       <span className="font-bold text-[11px] truncate">{item.label}</span>
@@ -2299,8 +2160,8 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
                     key={ch.id}
                     onClick={() => setDirectFollowUpChannel(ch.id as any)}
                     className={`p-2 rounded-xl text-xs font-bold border transition cursor-pointer ${directFollowUpChannel === ch.id
-                        ? 'bg-primary-50 dark:bg-primary-950/40 border-primary-500 text-primary-700 dark:text-primary-300 shadow-xs'
-                        : 'border-slate-200 dark:border-dark-700 text-slate-600 dark:text-dark-300'
+                      ? 'bg-primary-50 dark:bg-primary-950/40 border-primary-500 text-primary-700 dark:text-primary-300 shadow-xs'
+                      : 'border-slate-200 dark:border-dark-700 text-slate-600 dark:text-dark-300'
                       }`}
                   >
                     {ch.label}

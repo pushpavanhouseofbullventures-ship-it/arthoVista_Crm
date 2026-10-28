@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
-  X, Bug, CheckCircle2, Clock, AlertTriangle, AlertCircle,
-  ExternalLink, MessageSquare, Send, User, Monitor, ChevronRight,
-  ShieldCheck, Loader2, Sparkles, Check
+  X, Bug, CheckCircle2, Clock,
+  ExternalLink, MessageSquare, Send,
+  ShieldCheck, Loader2, Check
 } from 'lucide-react';
 import { api } from '../../../services/api';
 import { useAuthStore } from '../../../store/authStore';
@@ -33,12 +33,11 @@ export const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
   const [status, setStatus] = useState('open');
   const [severity, setSeverity] = useState('medium');
   const [resolutionNotes, setResolutionNotes] = useState('');
-  const [showResolutionForm, setShowResolutionForm] = useState(false);
   const [zoomImage, setZoomImage] = useState<string | null>(null);
 
   const isPrivileged = [
     'Admin', 'Super Admin', 'Manager', 'Team Leader', 'TL'
-  ].includes(userRole) || user?.email === 'shivamthakur12012@gmail.com';
+  ].includes(userRole) || ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '');
 
   useEffect(() => {
     if (isOpen && issueId) {
@@ -87,7 +86,6 @@ export const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
           ...updated,
           comments: prev?.comments || []
         }));
-        setShowResolutionForm(false);
         if (onUpdated) onUpdated(updated);
       }
     } catch (err) {

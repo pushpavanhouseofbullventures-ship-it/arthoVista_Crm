@@ -20,13 +20,13 @@ export default function RoleSwitcherModal({ isOpen, onClose }) {
     e.preventDefault();
     setPassError('');
     if (!passcode.trim()) {
-      setPassError('Please enter the Super Admin passcode.');
+      setPassError('Please enter the Admin passcode.');
       return;
     }
 
     const res = elevateToSuperAdmin(passcode.trim());
     if (res.success) {
-      addToast('Super Admin access granted! Full editing & deletion unlocked.', 'success');
+      addToast('Admin access granted! Full editing & deletion unlocked.', 'success');
       setPasscode('');
       onClose();
     } else {
@@ -41,7 +41,7 @@ export default function RoleSwitcherModal({ isOpen, onClose }) {
           <div className="modal-header-text">
             <h3>🔐 Role-Based Access Control (RBAC)</h3>
             <p className="modal-subtitle">
-              Test governance rules: only <strong>Super Admin</strong> can add, edit, or delete schemes.
+              Test governance rules: only <strong>Admin</strong> can add, edit, or delete schemes.
             </p>
           </div>
           <button className="modal-close" onClick={onClose}>✕</button>
@@ -111,8 +111,8 @@ export default function RoleSwitcherModal({ isOpen, onClose }) {
               <div className="elevation-header">
                 <span className="elevation-icon">⚡</span>
                 <div>
-                  <h4>Quick Super Admin Passcode Elevation</h4>
-                  <p>Enter the Super Admin master passcode (<code>admin123</code>) to unlock modification rights.</p>
+                  <h4>Quick Admin Passcode Elevation</h4>
+                  <p>Enter the Admin master passcode (<code>admin123</code>) to unlock modification rights.</p>
                 </div>
               </div>
               <form onSubmit={handleElevateSubmit} className="elevation-form">
@@ -122,9 +122,10 @@ export default function RoleSwitcherModal({ isOpen, onClose }) {
                   onChange={(e) => setPasscode(e.target.value)}
                   placeholder="Enter passcode (admin123)..."
                   className="form-input"
+                  autoFocus
                 />
                 <button type="submit" className="pill-btn btn-danger-gradient">
-                  Unlock Super Admin
+                  Unlock Admin
                 </button>
               </form>
               {passError && <div className="passcode-error-text">{passError}</div>}

@@ -8,7 +8,7 @@ import {
   Calendar, Plus, History, ArrowRightLeft,
   CheckCircle2, Zap, XCircle, Edit3, Save, X,
   Loader2, Send, Clock, Trash2, Bell, Check,
-  RefreshCw, StickyNote, Smartphone, ShieldCheck
+  RefreshCw, StickyNote, Smartphone, ShieldCheck, Wallet
 } from 'lucide-react';
 import { PipelineStatusDropdown } from '../../components/PipelineStatusDropdown';
 
@@ -70,11 +70,10 @@ export const LeadDetail: React.FC = () => {
   const queryClient = useQueryClient();
   const { user, organizations, activeOrganizationId } = useAuthStore();
   const activeOrg = organizations.find(org => org.id === activeOrganizationId) || organizations[0];
-  const activeRole = activeOrg?.role || (user?.email === 'shivamthakur12012@gmail.com' ? 'Admin' : 'Sale Executive');
-  const isAdmin = ['Admin', 'Super Admin'].includes(activeRole) || user?.email === 'shivamthakur12012@gmail.com';
+  const activeRole = activeOrg?.role || (['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '') ? 'Admin' : 'Sale Executive');
+  const isAdmin = ['Admin', 'Super Admin'].includes(activeRole) || ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '');
   const isManager = isAdmin || activeRole === 'Manager';
-  const isTeamLeader = isManager || activeRole === 'Team Leader';
-  const isPrivileged = isTeamLeader;
+  const isPrivileged = isManager;
 
   // Active sub-tab
   const [activeTab, setActiveTab] = useState<'timeline' | 'quotations' | 'assignment' | 'schedule'>('timeline');
@@ -101,6 +100,8 @@ export const LeadDetail: React.FC = () => {
     productInterested: '',
     priority: 'medium',
     expectedValue: 0,
+    paymentExpected: 0,
+    paymentReceived: 0,
     assignedTo: '',
     notes: ''
   });
@@ -139,8 +140,22 @@ export const LeadDetail: React.FC = () => {
   const [lostReason, setLostReason] = useState('Price');
   const [lostNotes, setLostNotes] = useState('');
   const [adminOverrideReason, setAdminOverrideReason] = useState('');
+  const [statusModalPaymentExpected, setStatusModalPaymentExpected] = useState<string>('');
+  const [statusModalPaymentReceived, setStatusModalPaymentReceived] = useState<string>('0');
   const [reopenModal, setReopenModal] = useState(false);
   const [reopenReason, setReopenReason] = useState('');
+
+  // Commercial & Payment tracking state (Any employee can open and edit)
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentExpectedInput, setPaymentExpectedInput] = useState<string>('');
+  const [paymentReceivedInput, setPaymentReceivedInput] = useState<string>('');
+  const [paymentUpdateNotes, setPaymentUpdateNotes] = useState<string>('');
+
+  // Conversion requirement modal when moving to Converted from pipeline buttons
+  const [conversionModal, setConversionModal] = useState<{ open: boolean; targetStatus: string; targetSubStage?: string } | null>(null);
+  const [conversionExpectedInput, setConversionExpectedInput] = useState<string>('');
+  const [conversionReceivedInput, setConversionReceivedInput] = useState<string>('0');
+  const [conversionNotesInput, setConversionNotesInput] = useState<string>('');
 
   // Next Follow-Up scheduling state
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -208,6 +223,12 @@ export const LeadDetail: React.FC = () => {
   const activities = leadData?.activities || [];
   const quotations = leadData?.quotations || [];
   const assignmentLogs = leadData?.assignmentLogs || [];
+
+  const assignedId = (typeof lead?.assignedTo === 'object' && lead?.assignedTo)
+    ? ((lead?.assignedTo as any)?._id || (lead?.assignedTo as any)?.id)
+    : lead?.assignedTo;
+  const isAssigned = Boolean(assignedId && user && (String(assignedId) === String((user as any)._id || user.id)));
+  const canEdit = isPrivileged || isAssigned;
 
   // Update follow-up date when loaded
   useEffect(() => {
@@ -303,7 +324,9 @@ export const LeadDetail: React.FC = () => {
       serviceInterested: lead.serviceInterested || '',
       productInterested: lead.productInterested || '',
       priority: lead.priority || 'medium',
-      expectedValue: Number(lead.expectedValue) || 0,
+      expectedValue: Number(lead.expectedValue) || Number(lead.paymentExpected) || 0,
+      paymentExpected: Number(lead.paymentExpected ?? lead.expectedValue ?? 0),
+      paymentReceived: Number(lead.paymentReceived ?? 0),
       assignedTo: assignedId ? assignedId.toString() : '',
       notes: lead.notes || ''
     });
@@ -348,7 +371,7 @@ export const LeadDetail: React.FC = () => {
 
   // Quick Dispatch Mutation (Lead Status & Sub-Pipeline change)
   const quickDispatchMutation = useMutation({
-    mutationFn: async ({ leadId, status, subStage, lostReason, transitionNotes }: { leadId: string; status?: string; subStage?: string; lostReason?: string; transitionNotes?: string }) => {
+    mutationFn: async ({ leadId, status, subStage, lostReason, transitionNotes, paymentExpected, paymentReceived }: { leadId: string; status?: string; subStage?: string; lostReason?: string; transitionNotes?: string; paymentExpected?: number; paymentReceived?: number }) => {
       const payload: any = {};
       if (status) payload.status = status;
       if (subStage) {
@@ -361,19 +384,65 @@ export const LeadDetail: React.FC = () => {
       if (status === 'Converted') {
         payload.adminOverrideReason = 'Direct Dispatch';
       }
+      if (paymentExpected !== undefined && paymentExpected !== null) {
+        payload.paymentExpected = Number(paymentExpected);
+      }
+      if (paymentReceived !== undefined && paymentReceived !== null) {
+        payload.paymentReceived = Number(paymentReceived);
+      }
       if (transitionNotes) {
         payload.transitionNotes = transitionNotes;
       }
       const res = await api.put(`/leads/${leadId}`, payload);
       return res.data;
     },
-    onSuccess: () => {
+    onMutate: async (newStage) => {
+      await queryClient.cancelQueries({ queryKey: ['lead-detail', id] });
+      const previousData = queryClient.getQueryData(['lead-detail', id]);
+      queryClient.setQueryData(['lead-detail', id], (old: any) => {
+        if (!old || !old.lead) return old;
+        return {
+          ...old,
+          lead: {
+            ...old.lead,
+            status: newStage.status || old.lead.status,
+            leadType: newStage.subStage || old.lead.leadType,
+            paymentExpected: newStage.paymentExpected !== undefined ? newStage.paymentExpected : old.lead.paymentExpected,
+            paymentReceived: newStage.paymentReceived !== undefined ? newStage.paymentReceived : old.lead.paymentReceived,
+            lostReason: newStage.status === 'Lost' ? (newStage.lostReason || 'Other') : (newStage.status ? null : old.lead.lostReason),
+            lostNotes: newStage.status === 'Lost' ? old.lead.lostNotes : (newStage.status ? null : old.lead.lostNotes)
+          }
+        };
+      });
+      return { previousData };
+    },
+    onError: (err: any, _, context: any) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(['lead-detail', id], context.previousData);
+      }
+      alert(err.response?.data?.message || 'Failed to update lead status.');
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['lead-detail', id] });
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+    }
+  });
+
+  // Dedicated Update Payment Mutation (Any employee can update payment info anytime)
+  const updatePaymentMutation = useMutation({
+    mutationFn: async (payload: { paymentExpected: number; paymentReceived: number; transitionNotes?: string }) => {
+      const res = await api.put(`/leads/${id}`, payload);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lead-detail', id] });
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      setShowPaymentModal(false);
+      alert('Payment details updated successfully.');
     },
     onError: (err: any) => {
-      alert(err.response?.data?.message || 'Failed to update lead status.');
+      alert(err.response?.data?.message || 'Failed to update payment information.');
     }
   });
 
@@ -483,27 +552,7 @@ export const LeadDetail: React.FC = () => {
     }
   };
 
-  const PIPELINE_STAGES = [
-    { step: 1, label: '1. New Lead', status: 'New', subStage: undefined },
-    { step: 2, label: '2. In Progress', status: 'Open', subStage: 'In Process' },
-    { step: 3, label: '3. Qualified', status: 'Open', subStage: 'Qualified' },
-    { step: 4, label: '4. Proposal Sent', status: 'Open', subStage: 'Proposal Sent' },
-    { step: 5, label: '5. Negotiation', status: 'Open', subStage: 'Negotiation' },
-    { step: 6, label: '6. Converted', status: 'Converted', subStage: 'Direct Won' }
-  ];
 
-  const getCurrentStageStep = () => {
-    if (!lead) return 1;
-    const st = (lead.status || 'New').toLowerCase();
-    if (st === 'new') return 1;
-    if (st === 'converted') return 6;
-    if (st === 'lost') return -1;
-    const sub = (lead.leadType || lead.subStage || '').toLowerCase();
-    if (sub.includes('negotiation')) return 5;
-    if (sub.includes('proposal')) return 4;
-    if (sub.includes('qualified')) return 3;
-    return 2;
-  };
 
   // Start Click-to-Call Handlers
   const handleStartCall = () => {
@@ -589,7 +638,7 @@ export const LeadDetail: React.FC = () => {
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {/* 1. Header Banner with Profile, ID & Actions */}
-      <div className="bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-800 p-6 rounded-3xl shadow-sm space-y-4">
+      <div className="bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark+-800 p-6 rounded-3xl shadow-sm space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-start space-x-3.5">
             <Link
@@ -611,34 +660,18 @@ export const LeadDetail: React.FC = () => {
                   currentStatus={lead.status || 'New'}
                   currentSubStage={lead.leadType || (lead.convertedInvoiceId ? 'Invoiced' : lead.convertedQuotationId ? 'Quotation Won' : undefined)}
                   currentLostReason={lead.lostReason}
+                  paymentExpected={lead.paymentExpected ?? lead.expectedValue}
+                  paymentReceived={lead.paymentReceived}
+                  paymentDue={lead.paymentDue !== undefined ? Number(lead.paymentDue) : Math.max(0, Number(lead.paymentExpected ?? lead.expectedValue ?? 0) - Number(lead.paymentReceived ?? 0))}
                   disabled={quickDispatchMutation.isPending}
-                  onSelectStage={({ leadId, status, subStage, lostReason, transitionNotes }) => {
-                    quickDispatchMutation.mutate({ leadId: leadId || id, status, subStage, lostReason, transitionNotes });
+                  onSelectStage={({ leadId, status, subStage, lostReason, transitionNotes, paymentExpected, paymentReceived }) => {
+                    quickDispatchMutation.mutate({ leadId: leadId || id, status, subStage, lostReason, transitionNotes, paymentExpected, paymentReceived });
                   }}
                 />
-
-                {/* Priority Badge (Matching Screenshot 2) */}
-                {lead.priority && (
-                  <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border ${lead.priority === 'urgent' || lead.priority === 'high'
-                    ? 'bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400 border-orange-200 dark:border-orange-800'
-                    : lead.priority === 'low'
-                      ? 'bg-slate-100 text-slate-700 dark:bg-dark-800 dark:text-slate-300 border border-slate-200 dark:border-dark-700'
-                      : 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
-                    }`}>
-                    {lead.priority}
-                  </span>
-                )}
               </div>
 
               {/* Lead Metadata Subtitle Row (Matching Screenshot 2) */}
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-dark-300">
-                <span className="flex items-center space-x-1.5 font-semibold text-slate-700 dark:text-slate-200">
-                  <span>👤 Assigned:</span>
-                  <span className="font-bold text-slate-900 dark:text-white">
-                    {typeof lead.assignedTo === 'object' && lead.assignedTo ? `${lead.assignedTo.firstName || ''} ${lead.assignedTo.lastName || ''}`.trim() : (lead.assignedTo || 'Unassigned')}
-                  </span>
-                </span>
-                <span>•</span>
                 <span className="font-semibold text-slate-700 dark:text-slate-200">
                   <span>Service:</span> <span className="font-bold text-slate-900 dark:text-white">{lead.serviceInterested || lead.productInterested || 'General Service'}</span>
                 </span>
@@ -740,20 +773,6 @@ export const LeadDetail: React.FC = () => {
                 <FileText className="h-3.5 w-3.5" />
                 <span>Create Quotation</span>
               </Link>
-            </div>
-
-            {/* Row 2: Secondary Utility Buttons (Matching Screenshot 2) */}
-            <div className="flex items-center space-x-2">
-              {/* Edit Details */}
-              {isPrivileged && (
-                <button
-                  onClick={handleOpenEditModal}
-                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-dark-800 dark:hover:bg-dark-700 dark:text-slate-200 font-bold text-xs transition border border-slate-200 dark:border-dark-700 shadow-2xs"
-                >
-                  <Edit3 className="h-3.5 w-3.5 text-slate-500" />
-                  <span>Edit Details</span>
-                </button>
-              )}
 
               {/* Quick Note Button */}
               <button
@@ -766,57 +785,106 @@ export const LeadDetail: React.FC = () => {
                 <span>Quick Note</span>
               </button>
             </div>
+
+            {/* Row 2: Secondary Utility Buttons (Matching Screenshot 2) */}
+            <div className="flex items-center space-x-2">
+              {/* Edit Details */}
+              {canEdit && (
+                <button
+                  onClick={handleOpenEditModal}
+                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-dark-800 dark:hover:bg-dark-700 dark:text-slate-200 font-bold text-xs transition border border-slate-200 dark:border-dark-700 shadow-2xs cursor-pointer"
+                >
+                  <Edit3 className="h-3.5 w-3.5 text-slate-500" />
+                  <span>Edit Details</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-black uppercase tracking-wider text-red-700 dark:text-dark-400">
-            PIPELINE STAGE
-          </span>
           {lead.status === 'Lost' && (
-            <span className="px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-400 text-xs font-black border border-rose-200 dark:border-rose-800">
-              ⚠️ Lead Lost ({lead.lostReason || 'Other'})
-            </span>
+            <div className="flex items-center space-x-2">
+              <span className="px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-400 text-xs font-black border border-rose-200 dark:border-rose-800">
+                ⚠️ Lead Lost ({lead.lostReason || 'Other'})
+              </span>
+              <button
+                type="button"
+                onClick={() => setReopenModal(true)}
+                className="inline-flex items-center space-x-1 px-3 py-1 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-xs transition hover:scale-105 active:scale-95 cursor-pointer"
+                title="Reopen lead back into Active Pipeline"
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5" />
+                <span>Reopen Lead</span>
+              </button>
+            </div>
+          )}
+          {lead.status === 'Converted' && (
+            <div className="flex items-center space-x-2">
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 text-xs font-black border border-emerald-200 dark:border-emerald-800">
+                🎉 Converted (Won)
+              </span>
+              <button
+                type="button"
+                onClick={() => setReopenModal(true)}
+                className="inline-flex items-center space-x-1 px-3 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-dark-800 dark:hover:bg-dark-700 dark:text-slate-300 font-bold text-xs transition cursor-pointer"
+                title="Reopen lead back into Active Pipeline"
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5" />
+                <span>Reopen Lead</span>
+              </button>
+            </div>
           )}
         </div>
+      </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-          {(() => {
-            const currentStep = getCurrentStageStep();
-            return PIPELINE_STAGES.map((stg) => {
-              const isCurrent = currentStep === stg.step;
-              const isCompleted = currentStep > stg.step && currentStep > 0;
-              const isPending = quickDispatchMutation.isPending;
+      {/* 2. Commercial & Payment Tracking Card */}
+      <div className="bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-800 rounded-3xl p-5 shadow-sm space-y-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
 
-              return (
-                <button
-                  key={stg.step}
-                  type="button"
-                  disabled={isPending}
-                  onClick={() => {
-                    quickDispatchMutation.mutate({
-                      leadId: lead._id || lead.id || id,
-                      status: stg.status,
-                      subStage: stg.subStage
-                    });
-                  }}
-                  className={`flex items-center justify-center space-x-1.5 px-3 py-2.5 rounded-2xl text-xs font-bold transition-colors duration-150 cursor-pointer ${isCurrent
-                    ? 'btn-blue-45 text-white shadow-md ring-2 ring-blue-500/20 scale-[1.01]'
-                    : isCompleted
-                      ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-100'
-                      : 'bg-slate-50 dark:bg-dark-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-700 border border-slate-200/80 dark:border-dark-700'
-                    }`}
-                  title={`Click to switch stage to ${stg.label}`}
-                >
-                  {isCompleted ? (
-                    <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 stroke-[3]" />
-                  ) : isCurrent ? (
-                    <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                  ) : null}
-                  <span>{stg.label}</span>
-                </button>
-              );
-            });
-          })()}
+          {/* Metrics and Action */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center space-x-3 bg-slate-50 dark:bg-dark-800 border border-slate-200/80 dark:border-dark-700 rounded-2xl px-4 py-2.5">
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Expected</span>
+                <span className="text-sm font-mono font-black text-amber-600 dark:text-amber-400">
+                  ₹{Number(lead.paymentExpected ?? lead.expectedValue ?? 0).toLocaleString('en-IN')}
+                </span>
+              </div>
+              <div className="w-px h-7 bg-slate-200 dark:bg-dark-700"></div>
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Completed</span>
+                <span className="text-sm font-mono font-black text-emerald-600 dark:text-emerald-400">
+                  ₹{Number(lead.paymentReceived ?? 0).toLocaleString('en-IN')}
+                </span>
+              </div>
+              <div className="w-px h-7 bg-slate-200 dark:bg-dark-700"></div>
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Due Balance</span>
+                <span className="text-sm font-mono font-black text-rose-600 dark:text-rose-400">
+                  ₹{(lead.paymentDue !== undefined && lead.paymentDue !== null
+                    ? Number(lead.paymentDue)
+                    : Math.max(0, Number(lead.paymentExpected ?? lead.expectedValue ?? 0) - Number(lead.paymentReceived ?? 0))
+                  ).toLocaleString('en-IN')}
+                </span>
+              </div>
+            </div>
+
+            {/* Edit Payment Button accessible by any employee */}
+            <button
+              type="button"
+              onClick={() => {
+                setPaymentExpectedInput(String(lead.paymentExpected ?? lead.expectedValue ?? 0));
+                setPaymentReceivedInput(String(lead.paymentReceived ?? 0));
+                setPaymentUpdateNotes('');
+                setShowPaymentModal(true);
+              }}
+              className="inline-flex items-center space-x-1.5 px-4 py-2.5 rounded-2xl btn-tri-45 text-white font-bold text-xs shadow-md transition hover:scale-105 active:scale-95 cursor-pointer"
+              title="Update Payment Expected or Received amount"
+            >
+              <Edit3 className="h-3.5 w-3.5" />
+              <span>Edit Payment</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1104,14 +1172,38 @@ export const LeadDetail: React.FC = () => {
           ) : (
             <div className="divide-y divide-slate-100 dark:divide-dark-800 text-xs">
               {assignmentLogs.map((log: any) => (
-                <div key={log._id} className="py-3 flex items-center justify-between">
-                  <div>
-                    <p className="font-bold text-slate-800 dark:text-white">
-                      Allocated to: {log.toUserId ? `${log.toUserId.firstName} ${log.toUserId.lastName}` : 'Unassigned'}
+                <div key={log._id} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="space-y-1">
+                    <div className="flex items-center flex-wrap gap-1.5">
+                      {log.fromUserId ? (
+                        <p className="font-bold text-slate-800 dark:text-white flex items-center flex-wrap gap-1">
+                          <span className="text-slate-400 font-semibold text-[11px]">Previous Rep:</span>
+                          <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-dark-800 text-slate-700 dark:text-dark-200">
+                            {log.fromUserId.firstName} {log.fromUserId.lastName}
+                          </span>
+                          <span className="text-primary-600 font-black mx-1">→</span>
+                          <span className="text-slate-400 font-semibold text-[11px]">New Assignee:</span>
+                          <span className="px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-200/60 dark:border-emerald-800/60">
+                            {log.toUserId ? `${log.toUserId.firstName} ${log.toUserId.lastName}` : 'Unassigned'}
+                          </span>
+                        </p>
+                      ) : (
+                        <p className="font-bold text-slate-800 dark:text-white flex items-center space-x-1.5">
+                          <span className="text-slate-400 font-semibold text-[11px]">Initial Assignment:</span>
+                          <span className="px-2 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-bold">
+                            {log.toUserId ? `${log.toUserId.firstName} ${log.toUserId.lastName}` : 'Unassigned'}
+                          </span>
+                        </p>
+                      )}
+                    </div>
+                    <p className="text-slate-400 text-[11px]">
+                      {log.assignedBy ? `Assigned by ${log.assignedBy.firstName} ${log.assignedBy.lastName} • ` : ''}
+                      Reason: <span className="text-slate-600 dark:text-dark-300 font-medium">{log.reason}</span> {log.ruleApplied ? `(Rule: ${log.ruleApplied})` : ''}
                     </p>
-                    <p className="text-slate-400 text-[11px]">Reason: {log.reason} (Rule: {log.ruleApplied})</p>
                   </div>
-                  <span className="text-[11px] text-slate-400">{new Date(log.createdAt).toLocaleString('en-IN')}</span>
+                  <span className="text-[11px] text-slate-400 font-mono whitespace-nowrap self-start sm:self-center">
+                    {new Date(log.createdAt).toLocaleString('en-IN')}
+                  </span>
                 </div>
               ))}
             </div>
@@ -1783,8 +1875,51 @@ export const LeadDetail: React.FC = () => {
                 <div className="p-3.5 rounded-2xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900 text-xs text-purple-800 dark:text-purple-300">
                   <p className="font-bold">Converting to Paying Customer</p>
                   <p className="text-[11px] text-purple-600 dark:text-purple-400 mt-1">
-                    Converting this lead marks it as a successfully won customer account.
+                    Converting this lead marks it as a successfully won customer account. Payment expected amount is mandatory.
                   </p>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700 dark:text-white">
+                      Payment Expected (₹) <span className="text-red-500">* (Mandatory)</span>
+                    </label>
+                    {!isAdmin && Number(lead?.paymentExpected ?? lead?.expectedValue ?? 0) > 0 && (
+                      <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800">
+                        🔒 Admin Locked
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="number"
+                    min="1"
+                    step="any"
+                    required
+                    disabled={!isAdmin && Number(lead?.paymentExpected ?? lead?.expectedValue ?? 0) > 0}
+                    placeholder="e.g. 50000"
+                    value={statusModalPaymentExpected}
+                    onChange={(e) => setStatusModalPaymentExpected(e.target.value)}
+                    className={`w-full p-2.5 rounded-xl border border-slate-200 dark:border-dark-700 font-mono font-semibold ${!isAdmin && Number(lead?.paymentExpected ?? lead?.expectedValue ?? 0) > 0
+                      ? 'bg-slate-100 dark:bg-dark-900 text-slate-400 cursor-not-allowed select-none'
+                      : 'bg-slate-50 dark:bg-dark-800 outline-none'
+                      }`}
+                  />
+                  {!isAdmin && Number(lead?.paymentExpected ?? lead?.expectedValue ?? 0) > 0 && (
+                    <p className="text-[10px] text-amber-500 mt-1">Payment expected was already filled and can only be modified by Admins.</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-white mb-1">
+                    Initial Payment Received (₹) (Optional)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    placeholder="0 if none received yet"
+                    value={statusModalPaymentReceived}
+                    onChange={(e) => setStatusModalPaymentReceived(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-dark-700 bg-slate-50 dark:bg-dark-800 outline-none font-mono font-semibold text-emerald-600 dark:text-emerald-400"
+                  />
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-white mb-1">Admin Override Reason (Optional):</label>
@@ -1805,12 +1940,23 @@ export const LeadDetail: React.FC = () => {
               </button>
               <button
                 disabled={updateStatusMutation.isPending}
-                onClick={() => updateStatusMutation.mutate({
-                  status: statusModal.targetStatus,
-                  lostReason: statusModal.targetStatus === 'Lost' ? lostReason : undefined,
-                  lostNotes: statusModal.targetStatus === 'Lost' ? lostNotes : undefined,
-                  adminOverrideReason: statusModal.targetStatus === 'Converted' ? (adminOverrideReason || 'Admin Direct Dispatch') : undefined
-                })}
+                onClick={() => {
+                  if (statusModal.targetStatus === 'Converted' && lead.status !== 'Converted') {
+                    const exp = Number(statusModalPaymentExpected);
+                    if (isNaN(exp) || exp <= 0) {
+                      alert('Payment Expected amount is required to convert a lead.');
+                      return;
+                    }
+                  }
+                  updateStatusMutation.mutate({
+                    status: statusModal.targetStatus,
+                    lostReason: statusModal.targetStatus === 'Lost' ? lostReason : undefined,
+                    lostNotes: statusModal.targetStatus === 'Lost' ? lostNotes : undefined,
+                    paymentExpected: statusModal.targetStatus === 'Converted' ? Number(statusModalPaymentExpected) : undefined,
+                    paymentReceived: statusModal.targetStatus === 'Converted' ? Number(statusModalPaymentReceived || 0) : undefined,
+                    adminOverrideReason: statusModal.targetStatus === 'Converted' ? (adminOverrideReason || 'Admin Direct Dispatch') : undefined
+                  });
+                }}
                 className="px-5 py-2 rounded-xl btn-tri-45 text-white font-bold text-xs disabled:opacity-50 transition shadow-md active:scale-95"
               >
                 {updateStatusMutation.isPending ? 'Dispatching...' : 'Confirm Dispatch'}
@@ -1824,7 +1970,7 @@ export const LeadDetail: React.FC = () => {
       {reopenModal && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <h3 className="text-base font-black text-slate-800 dark:text-white">Admin Reopen Lead</h3>
+            <h3 className="text-base font-black text-slate-800 dark:text-white">Reopen Lead</h3>
             <p className="text-xs text-slate-400">Provide an audit reason for reopening this closed lead:</p>
 
             <textarea
@@ -2151,14 +2297,42 @@ export const LeadDetail: React.FC = () => {
                   />
                 </div>
 
-                {/* Expected Deal Value */}
+                {/* Expected Deal Value / Payment Expected */}
                 <div>
-                  <label className="block font-bold text-slate-700 dark:text-dark-200 mb-1">Expected Deal Value (₹)</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700 dark:text-dark-200">Payment Expected (₹)</label>
+                    {!isAdmin && Number(lead?.paymentExpected ?? lead?.expectedValue ?? 0) > 0 && (
+                      <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800">
+                        🔒 Admin Locked
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="number"
+                    disabled={!isAdmin && Number(lead?.paymentExpected ?? lead?.expectedValue ?? 0) > 0}
                     value={editForm.expectedValue}
-                    onChange={(e) => setEditForm({ ...editForm, expectedValue: Number(e.target.value) })}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-dark-700 bg-slate-50 dark:bg-dark-800 outline-none text-slate-800 dark:text-white focus:ring-1 focus:ring-primary-500"
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setEditForm({ ...editForm, expectedValue: val, paymentExpected: val });
+                    }}
+                    className={`w-full p-2.5 rounded-xl border border-slate-200 dark:border-dark-700 font-mono ${!isAdmin && Number(lead?.paymentExpected ?? lead?.expectedValue ?? 0) > 0
+                      ? 'bg-slate-100 dark:bg-dark-900 text-slate-400 cursor-not-allowed select-none'
+                      : 'bg-slate-50 dark:bg-dark-800 text-slate-800 dark:text-white focus:ring-1 focus:ring-primary-500 outline-none'
+                      }`}
+                  />
+                  {!isAdmin && Number(lead?.paymentExpected ?? lead?.expectedValue ?? 0) > 0 && (
+                    <p className="text-[10px] text-amber-500 mt-1">Once filled, Payment Expected can only be edited by Admins.</p>
+                  )}
+                </div>
+
+                {/* Payment Received / Completed */}
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-dark-200 mb-1">Payment Received / Completed (₹)</label>
+                  <input
+                    type="number"
+                    value={editForm.paymentReceived}
+                    onChange={(e) => setEditForm({ ...editForm, paymentReceived: Number(e.target.value) })}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-dark-700 bg-slate-50 dark:bg-dark-800 outline-none text-slate-800 dark:text-white focus:ring-1 focus:ring-primary-500 font-mono text-emerald-600 dark:text-emerald-400"
                   />
                 </div>
 
@@ -2298,6 +2472,293 @@ export const LeadDetail: React.FC = () => {
                 <span>{addNoteMutation.isPending ? 'Saving...' : 'Save Quick Note'}</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 9. Employee Payment Edit Modal (Any employee can enter/edit payment details anytime) */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-dark-800 pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shadow-xs">
+                  <Wallet className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-800 dark:text-white">Update Payment Details</h3>
+                  <p className="text-xs text-slate-400 font-medium">
+                    {lead.name} • #{lead.leadId}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPaymentModal(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition p-1 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const exp = Number(paymentExpectedInput);
+                const rec = Number(paymentReceivedInput);
+                if (isNaN(exp) || exp < 0) {
+                  alert('Please enter a valid Payment Expected amount.');
+                  return;
+                }
+                if (isNaN(rec) || rec < 0) {
+                  alert('Please enter a valid Payment Received amount.');
+                  return;
+                }
+                updatePaymentMutation.mutate({
+                  paymentExpected: exp,
+                  paymentReceived: rec,
+                  transitionNotes: paymentUpdateNotes.trim() || undefined
+                });
+              }}
+              className="space-y-4 text-xs"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-bold text-slate-700 dark:text-slate-200">
+                    Payment Expected (₹) <span className="text-red-500">*</span>
+                  </label>
+                  {!isAdmin && Number(lead?.paymentExpected ?? lead?.expectedValue ?? 0) > 0 && (
+                    <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
+                      🔒 Admin Locked
+                    </span>
+                  )}
+                </div>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  required
+                  disabled={!isAdmin && Number(lead?.paymentExpected ?? lead?.expectedValue ?? 0) > 0}
+                  placeholder="Total amount expected from client"
+                  value={paymentExpectedInput}
+                  onChange={(e) => setPaymentExpectedInput(e.target.value)}
+                  className={`w-full p-2.5 rounded-xl border border-slate-200 dark:border-dark-700 font-mono font-semibold ${!isAdmin && Number(lead?.paymentExpected ?? lead?.expectedValue ?? 0) > 0
+                    ? 'bg-slate-100 dark:bg-dark-900 text-slate-400 cursor-not-allowed select-none'
+                    : 'bg-slate-50 dark:bg-dark-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none'
+                    }`}
+                />
+                {!isAdmin && Number(lead?.paymentExpected ?? lead?.expectedValue ?? 0) > 0 ? (
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">
+                    Once filled, Payment Expected cannot be edited by employees. Only Admins can modify Expected Payment.
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    {isAdmin ? 'Admins can edit both Expected and Received payment amounts.' : 'Enter the expected deal value once.'}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">
+                  Payment Received / Completed (₹)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder="Amount received so far (₹)"
+                  value={paymentReceivedInput}
+                  onChange={(e) => setPaymentReceivedInput(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-dark-700 bg-slate-50 dark:bg-dark-800 outline-none text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono font-bold text-emerald-600 dark:text-emerald-400"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Employees can update this anytime when payments are received or adjusted.
+                </p>
+              </div>
+
+              {/* Dynamic Due preview */}
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-dark-800 border border-slate-200 dark:border-dark-700 flex items-center justify-between">
+                <span className="font-bold text-slate-600 dark:text-slate-300">Remaining Balance (Due):</span>
+                <span className="font-mono font-black text-rose-600 dark:text-rose-400 text-sm">
+                  ₹{Math.max(0, (Number(paymentExpectedInput) || 0) - (Number(paymentReceivedInput) || 0)).toLocaleString('en-IN')}
+                </span>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">
+                  Update Notes / Reference (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Received via UPI / NEFT transaction ref #12345"
+                  value={paymentUpdateNotes}
+                  onChange={(e) => setPaymentUpdateNotes(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-dark-700 bg-slate-50 dark:bg-dark-800 outline-none text-slate-800 dark:text-white"
+                />
+              </div>
+
+              <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100 dark:border-dark-800">
+                <button
+                  type="button"
+                  onClick={() => setShowPaymentModal(false)}
+                  className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-800 font-bold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updatePaymentMutation.isPending}
+                  className="inline-flex items-center space-x-1.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold shadow-md disabled:opacity-50 transition active:scale-95 cursor-pointer"
+                >
+                  {updatePaymentMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      <span>Save Payment</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 10. Conversion Requirement Modal (Mandatory Payment Expected when converting) */}
+      {conversionModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-dark-800 pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shadow-xs">
+                  <CheckCircle2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-800 dark:text-white">Convert Lead to Won</h3>
+                  <p className="text-xs text-slate-400 font-medium">
+                    Moving to {conversionModal.targetSubStage || conversionModal.targetStatus}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setConversionModal(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition p-1 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900 text-xs text-purple-800 dark:text-purple-300">
+              <p className="font-bold">Conversion Commercial Requirement</p>
+              <p className="text-[11px] text-purple-600 dark:text-purple-400 mt-1">
+                Entering the Payment Expected amount is mandatory when converting a lead into the converted pipeline.
+              </p>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const exp = Number(conversionExpectedInput);
+                const rec = Number(conversionReceivedInput || 0);
+                if (isNaN(exp) || exp <= 0) {
+                  alert('Please enter a valid Payment Expected amount greater than 0.');
+                  return;
+                }
+                const due = Math.max(0, exp - rec);
+                if (conversionModal.targetSubStage === 'Invoiced' && due > 0) {
+                  alert(`Cannot move lead to Invoiced: Outstanding payment due is ₹${due.toLocaleString('en-IN')}. Payment due must be ₹0 or less before moving to Invoiced.`);
+                  return;
+                }
+                quickDispatchMutation.mutate({
+                  leadId: lead._id || lead.id || id,
+                  status: conversionModal.targetStatus,
+                  subStage: conversionModal.targetSubStage,
+                  paymentExpected: exp,
+                  paymentReceived: rec,
+                  transitionNotes: conversionNotesInput.trim() || undefined
+                });
+                setConversionModal(null);
+              }}
+              className="space-y-4 text-xs"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-bold text-slate-700 dark:text-slate-200">
+                    Payment Expected (₹) <span className="text-red-500">* (Mandatory)</span>
+                  </label>
+                  {!isAdmin && Number(lead?.paymentExpected ?? lead?.expectedValue ?? 0) > 0 && (
+                    <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800">
+                      🔒 Admin Locked
+                    </span>
+                  )}
+                </div>
+                <input
+                  type="number"
+                  min="1"
+                  step="any"
+                  required
+                  disabled={!isAdmin && Number(lead?.paymentExpected ?? lead?.expectedValue ?? 0) > 0}
+                  placeholder="e.g. 50000"
+                  value={conversionExpectedInput}
+                  onChange={(e) => setConversionExpectedInput(e.target.value)}
+                  className={`w-full p-2.5 rounded-xl border border-slate-200 dark:border-dark-700 font-mono font-semibold ${!isAdmin && Number(lead?.paymentExpected ?? lead?.expectedValue ?? 0) > 0
+                    ? 'bg-slate-100 dark:bg-dark-900 text-slate-400 cursor-not-allowed select-none'
+                    : 'bg-slate-50 dark:bg-dark-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none'
+                    }`}
+                />
+                {!isAdmin && Number(lead?.paymentExpected ?? lead?.expectedValue ?? 0) > 0 && (
+                  <p className="text-[10px] text-amber-500 mt-1">Payment Expected was already filled and can only be modified by Admins.</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">
+                  Initial Payment Received (₹) (Optional)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder="0 if payment is pending"
+                  value={conversionReceivedInput}
+                  onChange={(e) => setConversionReceivedInput(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-dark-700 bg-slate-50 dark:bg-dark-800 outline-none font-mono font-semibold text-emerald-600 dark:text-emerald-400"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">
+                  Conversion Notes (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Direct customer confirmation"
+                  value={conversionNotesInput}
+                  onChange={(e) => setConversionNotesInput(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-dark-700 bg-slate-50 dark:bg-dark-800 outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100 dark:border-dark-800">
+                <button
+                  type="button"
+                  onClick={() => setConversionModal(null)}
+                  className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-dark-800 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={quickDispatchMutation.isPending}
+                  className="px-5 py-2.5 rounded-xl btn-green-45 text-white font-bold shadow-md active:scale-95 disabled:opacity-50 cursor-pointer"
+                >
+                  Confirm Conversion
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

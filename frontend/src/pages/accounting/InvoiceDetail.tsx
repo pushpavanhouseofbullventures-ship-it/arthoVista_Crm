@@ -1,14 +1,30 @@
 import React, { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, Navigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../services/api';
+import { useAuthStore } from '../../store/authStore';
 import { 
   ArrowLeft, Loader2, AlertCircle, Printer, CreditCard
 } from 'lucide-react';
+import { DocumentWatermark } from '../../components/DocumentWatermark';
 
 export const InvoiceDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
+  const { user, organizations, activeOrganizationId } = useAuthStore();
+  const activeOrg = organizations.find(org => org.id === activeOrganizationId) || organizations[0];
+  const activeRole = activeOrg?.role || (['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '') ? 'Admin' : 'Sale Executive');
+  const isAdmin = ['Admin', 'Super Admin'].includes(activeRole) || ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '');
+  const isManager = isAdmin || activeRole === 'Manager';
+  const isFinance = activeRole === 'Finance' || activeRole?.toLowerCase().includes('finance');
+  const isOperation = ['Operation', 'Operations'].includes(activeRole) || activeRole?.toLowerCase().includes('operat');
+  const isSaleEmployee = activeRole === 'Sale Executive' || activeRole === 'Sales Executive' || activeRole === 'Employee';
+  const hasInvoiceAccess = !isSaleEmployee && (isAdmin || isManager || isFinance || isOperation);
+
+  if (!hasInvoiceAccess) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -102,6 +118,7 @@ export const InvoiceDetail: React.FC = () => {
   const invoicePayments = Array.isArray(invoice.payments) ? invoice.payments : [];
   const totalPaid = invoicePayments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || (Number(invoice.amountPaid) || 0);
   const remainingBalance = invoice.outstandingBalance !== undefined ? invoice.outstandingBalance : Math.max(0, (Number(invoice.totalAmount) || 0) - totalPaid);
+  const cleanInvoiceNotes = (invoice.notes || '').replace(/<!--\s*OT_WORKFLOW:[\s\S]*?-->/g, '').trim();
 
   return (
     <div className="space-y-6">
@@ -154,7 +171,7 @@ export const InvoiceDetail: React.FC = () => {
 
           <button
             onClick={handlePrint}
-            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-dark-800 text-slate-700 dark:text-dark-200 font-semibold text-xs rounded-xl transition flex items-center space-x-1.5"
+            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-dark-800 text-slate-700 dark:text-dark-200 font-semibold text-xs rounded-xl transition flex items-center space-x-1.5 shadow-xs"
           >
             <Printer className="h-4 w-4" />
             <span>Print / PDF</span>
@@ -163,97 +180,108 @@ export const InvoiceDetail: React.FC = () => {
       </div>
 
       {/* Main Print Layout frame */}
-      <div className="bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-800 rounded-3xl p-8 shadow-sm space-y-8 print-invoice-card">
-        
-        {/* Invoice Header */}
-        <div className="flex justify-between items-start border-b border-slate-100 dark:border-dark-800 pb-6">
-          <div>
-            <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">ARTHAVENTURE CRM</h2>
-            <p className="text-[10px] text-slate-400 dark:text-dark-500 mt-1 uppercase font-semibold">Corporate Tax Invoice</p>
-          </div>
-          <div className="text-right">
-            <h3 className="text-lg font-mono font-black text-slate-800 dark:text-white">{invoice.invoiceId}</h3>
-            <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-100 text-slate-700 dark:bg-dark-800 dark:text-dark-300">
-              Status: {invoice.status}
-            </span>
-          </div>
-        </div>
+      <div className="bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-800 rounded-2xl p-6 sm:p-10 shadow-sm print-invoice-card max-w-4xl mx-auto relative overflow-hidden">
+        {/* Executive Security & Brand Watermark */}
+        <DocumentWatermark
+          brandText="ArthoVista"
+          subText="CORPORATE TAX INVOICE"
+          documentType="invoice"
+          status={invoice.status}
+        />
 
-        {/* Invoice Billing Info Grid */}
-        <div className="grid grid-cols-2 gap-6 text-xs leading-relaxed">
-          <div className="space-y-1">
-            <span className="block text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Billed To:</span>
-            <h4 className="font-bold text-slate-850 dark:text-white">{invoice.customerId?.name}</h4>
-            {invoice.customerId?.companyName && <p className="text-slate-500">{invoice.customerId.companyName}</p>}
-            {invoice.customerId?.billingAddress && <p className="text-slate-400 max-w-xs">{invoice.customerId.billingAddress}</p>}
-            {invoice.customerId?.gstin && <p className="text-[10px] font-mono text-slate-450 mt-1">GSTIN: {invoice.customerId.gstin}</p>}
-          </div>
-
-          <div className="text-right space-y-1.5">
-            <div className="flex justify-end space-x-2">
-              <span className="text-slate-400">Issue Date:</span>
-              <span className="font-semibold text-slate-850 dark:text-white">{new Date(invoice.date).toLocaleDateString()}</span>
+        <div className="relative z-10 space-y-6">
+          {/* Invoice Header */}
+          <div className="flex justify-between items-start border-b border-slate-200 dark:border-dark-800 pb-5">
+            <div>
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">ArthoVista CRM</h2>
+              <p className="text-[10px] text-slate-500 dark:text-dark-400 mt-1 uppercase font-bold tracking-wider">Corporate Tax Invoice</p>
             </div>
-            <div className="flex justify-end space-x-2">
-              <span className="text-slate-400">Due Date:</span>
-              <span className="font-semibold text-slate-850 dark:text-white">{new Date(invoice.dueDate).toLocaleDateString()}</span>
-            </div>
-            <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100 dark:border-dark-800 max-w-xs ml-auto">
-              <span className="text-slate-400 font-semibold uppercase text-[10px]">Outstanding:</span>
-              <span className="font-bold text-slate-900 dark:text-white">₹{remainingBalance.toLocaleString()}</span>
+            <div className="text-right">
+              <h3 className="text-xl font-mono font-black text-slate-900 dark:text-white">{invoice.invoiceId}</h3>
+              <span className="inline-block mt-1 px-2.5 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-100 text-slate-700 dark:bg-dark-800 dark:text-dark-300 border border-slate-200 dark:border-dark-700">
+                Status: {invoice.status}
+              </span>
             </div>
           </div>
-        </div>
 
-        {/* Invoice Items Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-slate-50 dark:bg-dark-950 text-slate-500 dark:text-dark-400 text-[10px] font-bold uppercase border-b border-slate-100 dark:border-dark-800">
-                <th className="py-3 px-4">Line Description</th>
-                <th className="py-3 px-4 text-center">Qty</th>
-                <th className="py-3 px-4 text-right">Rate (₹)</th>
-                <th className="py-3 px-4 text-center">GST (%)</th>
-                <th className="py-3 px-4 text-right">Tax (₹)</th>
-                <th className="py-3 px-4 text-right">Total (₹)</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-150 dark:divide-dark-800/40">
-              {invoiceItems.map((item: any, iIdx: number) => (
-                <tr key={item._id || item.id || iIdx} className="text-slate-700 dark:text-dark-300">
-                  <td className="py-3.5 px-4 font-semibold text-slate-900 dark:text-white">{item.name}</td>
-                  <td className="py-3.5 px-4 text-center">{item.quantity}</td>
-                  <td className="py-3.5 px-4 text-right">₹{item.rate.toLocaleString()}</td>
-                  <td className="py-3.5 px-4 text-center">{item.gstRate}%</td>
-                  <td className="py-3.5 px-4 text-right">₹{item.taxAmount.toLocaleString()}</td>
-                  <td className="py-3.5 px-4 text-right font-bold text-slate-900 dark:text-white">₹{item.total.toLocaleString()}</td>
+          {/* Invoice Billing Info Grid */}
+          <div className="grid grid-cols-2 gap-8 text-xs leading-relaxed">
+            <div className="space-y-1">
+              <span className="block text-[10px] text-slate-500 dark:text-dark-400 font-bold uppercase tracking-wider">Billed To:</span>
+              <h4 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">{invoice.customerId?.name}</h4>
+              {invoice.customerId?.companyName && <p className="text-slate-700 dark:text-slate-300 font-medium">{invoice.customerId.companyName}</p>}
+              {invoice.customerId?.billingAddress && <p className="text-slate-600 dark:text-slate-400 max-w-xs">{invoice.customerId.billingAddress}</p>}
+              {invoice.customerId?.gstin && <p className="text-[10px] font-mono text-slate-600 dark:text-slate-400 mt-1">GSTIN: {invoice.customerId.gstin}</p>}
+            </div>
+
+            <div className="text-right space-y-1.5 flex flex-col items-end justify-start">
+              <div className="flex justify-between w-60 text-xs">
+                <span className="text-slate-500 dark:text-dark-400 font-medium">Issue Date:</span>
+                <span className="font-bold text-slate-900 dark:text-white">{new Date(invoice.date).toLocaleDateString()}</span>
+              </div>
+              <div className="flex justify-between w-60 text-xs">
+                <span className="text-slate-500 dark:text-dark-400 font-medium">Due Date:</span>
+                <span className="font-bold text-slate-900 dark:text-white">{new Date(invoice.dueDate).toLocaleDateString()}</span>
+              </div>
+              <div className="flex justify-between w-60 pt-2 border-t border-slate-200 dark:border-dark-800 text-xs">
+                <span className="text-slate-500 dark:text-dark-400 font-bold uppercase text-[10px]">Outstanding:</span>
+                <span className="font-black text-slate-900 dark:text-white">₹{remainingBalance.toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Invoice Items Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs print:table-fixed">
+              <thead>
+                <tr className="bg-slate-100 dark:bg-dark-950 text-slate-700 dark:text-dark-300 text-[10px] font-bold uppercase border-b border-slate-200 dark:border-dark-800">
+                  <th className="py-3 px-4 w-[40%]">Line Description</th>
+                  <th className="py-3 px-4 text-center w-[10%]">Qty</th>
+                  <th className="py-3 px-4 text-right w-[15%]">Rate (₹)</th>
+                  <th className="py-3 px-4 text-center w-[10%]">GST (%)</th>
+                  <th className="py-3 px-4 text-right w-[12%]">Tax (₹)</th>
+                  <th className="py-3 px-4 text-right w-[13%]">Total (₹)</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-150 dark:divide-dark-800/40">
+                {invoiceItems.map((item: any, iIdx: number) => (
+                  <tr key={item._id || item.id || iIdx} className="text-slate-700 dark:text-dark-300">
+                    <td className="py-3.5 px-4 font-semibold text-slate-900 dark:text-white">{item.name}</td>
+                    <td className="py-3.5 px-4 text-center text-slate-800 dark:text-slate-200">{item.quantity}</td>
+                    <td className="py-3.5 px-4 text-right font-mono text-slate-800 dark:text-slate-200">₹{Number(item.rate).toLocaleString()}</td>
+                    <td className="py-3.5 px-4 text-center text-slate-800 dark:text-slate-200">{item.gstRate}%</td>
+                    <td className="py-3.5 px-4 text-right font-mono text-slate-800 dark:text-slate-200">₹{Number(item.taxAmount).toLocaleString()}</td>
+                    <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-900 dark:text-white">₹{Number(item.total).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-        {/* Financial Breakdowns */}
-        <div className="flex flex-col sm:flex-row justify-between items-start gap-6 pt-4 border-t border-slate-100 dark:border-dark-800">
-          <p className="text-[10px] text-slate-400 italic max-w-sm">
-            {invoice.notes || 'Note: Statutory filings payments are non-refundable after government application processing commences.'}
-          </p>
+          {/* Financial Breakdowns */}
+          <div className="flex flex-col sm:flex-row justify-between items-start gap-6 pt-4 border-t border-slate-200 dark:border-dark-800">
+            <div className="space-y-1 max-w-sm">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-dark-400 block">Terms & Notes:</span>
+              <p className="text-[11px] text-slate-600 dark:text-slate-300 italic leading-relaxed">
+                {cleanInvoiceNotes || 'Statutory filings payments are non-refundable after government application processing commences.'}
+              </p>
+            </div>
 
-          <div className="w-80 space-y-3 text-xs text-slate-500 font-semibold">
-            <div className="flex justify-between">
-              <span>Subtotal (Net Value)</span>
-              <span className="text-slate-800 dark:text-white">₹{invoice.subtotal.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between text-[11px] font-normal text-slate-450 border-b border-slate-100 dark:border-dark-800 pb-2">
-              <span>GST Tax components</span>
-              <span>₹{invoice.taxTotal.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between text-sm font-bold text-slate-900 dark:text-white">
-              <span>Grand Total</span>
-              <span className="text-primary-600 dark:text-primary-400">₹{invoice.totalAmount.toLocaleString()}</span>
+            <div className="w-80 space-y-2 text-xs text-slate-600 dark:text-slate-300 font-semibold ml-auto">
+              <div className="flex justify-between">
+                <span>Subtotal (Net Value)</span>
+                <span className="text-slate-900 dark:text-white font-mono">₹{invoice.subtotal.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-[11px] font-normal text-slate-500 dark:text-dark-400 border-b border-slate-200 dark:border-dark-800 pb-2">
+                <span>GST Tax components</span>
+                <span className="font-mono">₹{invoice.taxTotal.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-base font-black text-slate-900 dark:text-white pt-1">
+                <span>Grand Total</span>
+                <span className="text-primary-600 dark:text-primary-400 font-mono text-lg">₹{invoice.totalAmount.toLocaleString()}</span>
+              </div>
             </div>
           </div>
-        </div>
 
         {/* Payments Received History */}
         {invoicePayments.length > 0 && (
@@ -272,7 +300,7 @@ export const InvoiceDetail: React.FC = () => {
             </div>
           </div>
         )}
-
+        </div>
       </div>
 
       {/* Record Payment modal */}

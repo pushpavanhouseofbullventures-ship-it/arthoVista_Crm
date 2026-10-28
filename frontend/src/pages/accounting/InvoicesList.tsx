@@ -1,12 +1,27 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { api } from '../../services/api';
+import { useAuthStore } from '../../store/authStore';
 import {
   Plus, Search, Loader2, FileText, IndianRupee, ChevronRight
 } from 'lucide-react';
 
 export const InvoicesList: React.FC = () => {
+  const { user, organizations, activeOrganizationId } = useAuthStore();
+  const activeOrg = organizations.find(org => org.id === activeOrganizationId) || organizations[0];
+  const activeRole = activeOrg?.role || (['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '') ? 'Admin' : 'Sale Executive');
+  const isAdmin = ['Admin', 'Super Admin'].includes(activeRole) || ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '');
+  const isManager = isAdmin || activeRole === 'Manager';
+  const isFinance = activeRole === 'Finance' || activeRole?.toLowerCase().includes('finance');
+  const isOperation = ['Operation', 'Operations'].includes(activeRole) || activeRole?.toLowerCase().includes('operat');
+  const isSaleEmployee = activeRole === 'Sale Executive' || activeRole === 'Sales Executive' || activeRole === 'Employee';
+  const hasInvoiceAccess = !isSaleEmployee && (isAdmin || isManager || isFinance || isOperation);
+
+  if (!hasInvoiceAccess) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
 
@@ -80,20 +95,20 @@ export const InvoicesList: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Invoicing Ledger</h1>
-          <p className="text-xs text-slate-500 dark:text-dark-400">Generate tax invoices, track payment receipts, and reconcile client accounts balances.</p>
+      <div className="relative overflow-hidden rounded-3xl text-white p-6 sm:p-8 shadow-xl border border-slate-800 btn-tri-45">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Invoicing Ledger</h1>
+          </div>
+          <Link
+            to="/accounting/invoices/new"
+            className="btn-tri-45 font-bold py-2 px-4 rounded-xl text-sm shadow-md transition flex items-center space-x-2 active:scale-95"
+          >
+            <Plus className="h-4 w-4" />
+            <span>New Invoice</span>
+          </Link>
         </div>
-        <Link
-          to="/accounting/invoices/new"
-          className="btn-tri-45 font-bold py-2 px-4 rounded-xl text-sm shadow-md transition flex items-center space-x-2 active:scale-95"
-        >
-          <Plus className="h-4 w-4" />
-          <span>New Invoice</span>
-        </Link>
       </div>
-
       {/* Metrics overview */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         <div className="bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-800 rounded-3xl p-5 shadow-sm relative overflow-hidden">
@@ -140,8 +155,8 @@ export const InvoicesList: React.FC = () => {
               key={pill.id}
               onClick={() => setStatusFilter(pill.id)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition ${statusFilter === pill.id
-                  ? 'btn-blue-45 text-white shadow'
-                  : 'text-slate-500 hover:bg-slate-100 dark:text-dark-400 dark:hover:bg-dark-800'
+                ? 'btn-blue-45 text-white shadow'
+                : 'text-slate-500 hover:bg-slate-100 dark:text-dark-400 dark:hover:bg-dark-800'
                 }`}
             >
               {pill.name}

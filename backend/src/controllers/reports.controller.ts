@@ -15,7 +15,7 @@ export async function getReportsSummary(req: Request, res: Response, next: NextF
 
     // 1. Financial Analytics Summary
     const activeInvoices = await Invoice.find({ organizationId: orgId, isDeleted: false, status: { $ne: 'void' } });
-    
+
     let totalInvoiced = 0;
     let netSubtotal = 0;
     let taxTotal = 0;
@@ -131,7 +131,7 @@ export async function getCrmDashboardMetrics(req: Request, res: Response, next: 
   try {
     const orgId = req.organizationId;
     const userRole = (req as any).userRole;
-    const isPrivileged = ['Admin', 'Super Admin', 'Manager', 'Team Leader'].includes(userRole) || req.user?.email === 'shivamthakur12012@gmail.com';
+    const isPrivileged = ['Admin', 'Super Admin', 'Manager', 'Team Leader'].includes(userRole) || ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(req.user?.email || '');
     const userId = req.user?.id;
     const now = new Date();
 

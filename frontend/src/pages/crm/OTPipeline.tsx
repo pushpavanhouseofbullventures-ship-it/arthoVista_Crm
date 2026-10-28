@@ -115,9 +115,9 @@ export const OTPipeline: React.FC = () => {
   // 1. Role context & validation
   const { user, organizations, activeOrganizationId } = useAuthStore();
   const activeOrg = organizations.find(org => org.id === activeOrganizationId) || organizations[0];
-  const activeRole = activeOrg?.role || (user?.email === 'shivamthakur12012@gmail.com' ? 'Admin' : 'Sale Executive');
+  const activeRole = activeOrg?.role || (['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '') ? 'Admin' : 'Sale Executive');
 
-  const isAdmin = ['Admin', 'Super Admin'].includes(activeRole) || user?.email === 'shivamthakur12012@gmail.com';
+  const isAdmin = ['Admin', 'Super Admin'].includes(activeRole) || ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '');
   const isManager = isAdmin || activeRole === 'Manager';
   const isFinance = activeRole === 'Finance' || activeRole?.toLowerCase().includes('finance');
   const isOperation = ['Operation', 'Operations'].includes(activeRole) || activeRole?.toLowerCase().includes('operat');
@@ -420,9 +420,17 @@ export const OTPipeline: React.FC = () => {
 
       // 1. Finance Person View:
       if (isStrictFinance) {
-        // Must be paid and NOT yet approved by Finance
-        if (!isPaid) return false;
-        if (isApproved) return false;
+        if (financeFilter === 'pending_approval') {
+          // Awaiting Handover: Paid and not yet approved
+          if (!isPaid || isApproved) return false;
+        } else if (financeFilter === 'invoiced') {
+          // Billing Pending / Invoiced but unpaid
+          if (isPaid) return false;
+        } else if (financeFilter === 'paid') {
+          // Paid or approved
+          if (!isPaid) return false;
+        }
+        // When 'all', show all proposals in finance track (billing pending, invoiced, awaiting handover, settled)
         return true;
       }
 
@@ -474,6 +482,7 @@ export const OTPipeline: React.FC = () => {
   }).length;
 
   // Finance Metrics: leads with paid invoices awaiting Finance approval
+  const finBillingPendingCount = rawQuotations.filter(q => !checkIsInvoicePaid(q, parseWorkflow(q))).length;
   const finPaidPendingApprovalCount = rawQuotations.filter(q => {
     const wf = parseWorkflow(q);
     return checkIsInvoicePaid(q, wf) && !wf.financeApproved;
@@ -496,7 +505,7 @@ export const OTPipeline: React.FC = () => {
               {isStrictFinance && (
                 <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold flex items-center space-x-1.5">
                   <CreditCard className="h-3.5 w-3.5" />
-                  <span>Finance Desk • Pending Approval Queue</span>
+                  <span>Finance Desk • Billing & Approval Operations</span>
                 </span>
               )}
               {isStrictOperation && (
@@ -512,13 +521,6 @@ export const OTPipeline: React.FC = () => {
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-300 max-w-2xl">
-              {isStrictFinance
-                ? 'Only deals with paid invoices awaiting your financial verification and handover are visible here.'
-                : isStrictOperation
-                  ? 'Only deals approved and handed over by the Finance team are visible here for milestone fulfillment.'
-                  : 'Unified cross-department pipeline: Finance verifies paid invoices and approves handover to Operations.'}
-            </p>
           </div>
 
           <div className="flex items-center space-x-3">
@@ -608,7 +610,7 @@ export const OTPipeline: React.FC = () => {
                 <span>Finance Track</span>
                 <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${departmentTrack === 'finance' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-dark-800 text-slate-600 dark:text-slate-300'
                   }`}>
-                  {finPaidPendingApprovalCount} Pending Approval
+                  {finBillingPendingCount > 0 ? `${finBillingPendingCount} Pending Action` : `${rawQuotations.length} Deals`}
                 </span>
               </button>
             )}
@@ -646,18 +648,18 @@ export const OTPipeline: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1 */}
         {isStrictFinance ? (
-          <div className="relative overflow-hidden p-5 rounded-2xl bg-white dark:bg-dark-900 border border-slate-200/80 dark:border-dark-800 shadow-sm space-y-2 group hover:border-emerald-400/50 transition-all">
-            <div className="h-1 w-full absolute top-0 left-0 btn-green-45" />
+          <div className="relative overflow-hidden p-5 rounded-2xl bg-white dark:bg-dark-900 border border-slate-200/80 dark:border-dark-800 shadow-sm space-y-2 group hover:border-amber-400/50 transition-all">
+            <div className="h-1 w-full absolute top-0 left-0 bg-gradient-to-r from-amber-500 to-amber-600" />
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-dark-400">Awaiting Finance Approval</span>
-              <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                <Clock className="h-5 w-5" />
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-dark-400">Billing Pending</span>
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                <Receipt className="h-5 w-5" />
               </div>
             </div>
-            <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
-              {finPaidPendingApprovalCount}
+            <div className="text-2xl font-black text-amber-600 dark:text-amber-400">
+              {finBillingPendingCount}
             </div>
-            <p className="text-[11px] text-slate-400">Paid invoices pending your handover approval</p>
+            <p className="text-[11px] text-slate-400">Proposals requiring invoicing or payment</p>
           </div>
         ) : isStrictOperation ? (
           <div className="relative overflow-hidden p-5 rounded-2xl bg-white dark:bg-dark-900 border border-slate-200/80 dark:border-dark-800 shadow-sm space-y-2 group hover:border-orange-400/50 transition-all">
@@ -689,43 +691,49 @@ export const OTPipeline: React.FC = () => {
           </div>
         )}
 
-        {/* Card 2: Operations Active */}
-        <div className="relative overflow-hidden p-5 rounded-2xl bg-white dark:bg-dark-900 border border-slate-200/80 dark:border-dark-800 shadow-sm space-y-2 group hover:border-orange-400/50 transition-all">
-          <div className="h-1 w-full absolute top-0 left-0 btn-orange-45" />
+        {/* Card 2: Operations Active / Finance Awaiting Handover */}
+        <div className="relative overflow-hidden p-5 rounded-2xl bg-white dark:bg-dark-900 border border-slate-200/80 dark:border-dark-800 shadow-sm space-y-2 group hover:border-emerald-400/50 transition-all">
+          <div className="h-1 w-full absolute top-0 left-0 btn-green-45" />
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-dark-400">
-              {isStrictFinance ? 'Handed Over to Ops' : 'In Execution'}
+              {isStrictFinance ? 'Awaiting Handover' : 'In Execution'}
             </span>
-            <div className="p-2 rounded-xl bg-orange-500/10 text-[#fe7c02] dark:text-orange-400 border border-orange-500/20">
-              <Settings2 className="h-5 w-5" />
+            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+              <Clock className="h-5 w-5" />
             </div>
           </div>
-          <div className="text-2xl font-black text-[#fe7c02] dark:text-orange-400">
-            {isStrictFinance ? finApprovedHandedOverCount : opsInProgressCount}
+          <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+            {isStrictFinance ? finPaidPendingApprovalCount : opsInProgressCount}
           </div>
           <p className="text-[11px] text-slate-400">
-            {isStrictFinance ? 'Successfully passed to Operations' : 'Active milestone delivery tasks'}
+            {isStrictFinance ? 'Paid invoices ready for Ops handover' : 'Active milestone delivery tasks'}
           </p>
         </div>
 
-        {/* Card 3: Finance Pending / Verification */}
-        <div className="relative overflow-hidden p-5 rounded-2xl bg-white dark:bg-dark-900 border border-slate-200/80 dark:border-dark-800 shadow-sm space-y-2 group hover:border-amber-400/50 transition-all">
-          <div className="h-1 w-full absolute top-0 left-0 bg-gradient-to-r from-amber-500 to-amber-600" />
+        {/* Card 3: Finance Pending / Handed Over to Ops */}
+        <div className="relative overflow-hidden p-5 rounded-2xl bg-white dark:bg-dark-900 border border-slate-200/80 dark:border-dark-800 shadow-sm space-y-2 group hover:border-purple-400/50 transition-all">
+          <div className="h-1 w-full absolute top-0 left-0 bg-gradient-to-r from-purple-500 to-indigo-600" />
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-dark-400">
-              {isStrictOperation ? 'KYC Verification' : 'Finance Review'}
+              {isStrictFinance ? 'Handed Over to Ops' : isStrictOperation ? 'KYC Verification' : 'Finance Review'}
             </span>
-            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 border border-amber-500/20">
+            <div className="p-2 rounded-xl bg-purple-500/10 text-purple-600 border border-purple-500/20">
               <CheckSquare className="h-5 w-5" />
             </div>
           </div>
-          <div className="text-2xl font-black text-amber-600 dark:text-amber-400">
-            {isStrictOperation
-              ? rawQuotations.filter(q => parseWorkflow(q).financeApproved && parseWorkflow(q).opsStatus === 'docs_pending').length
-              : finPaidPendingApprovalCount}
+          <div className="text-2xl font-black text-purple-600 dark:text-purple-400">
+            {isStrictFinance
+              ? finApprovedHandedOverCount
+              : isStrictOperation
+                ? rawQuotations.filter(q => parseWorkflow(q).financeApproved && parseWorkflow(q).opsStatus === 'docs_pending').length
+                : finPaidPendingApprovalCount}
           </div>
           <p className="text-[11px] text-slate-400">
-            {isStrictOperation ? 'Awaiting onboarding documents' : 'Paid deals ready for approval'}
+            {isStrictFinance
+              ? 'Successfully passed to Operations'
+              : isStrictOperation
+                ? 'Awaiting onboarding documents'
+                : 'Paid deals ready for approval'}
           </p>
         </div>
 
@@ -811,39 +819,35 @@ export const OTPipeline: React.FC = () => {
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
               >
-                {isStrictFinance ? 'Pending Approvals' : 'All Finance'}
+                All Finance ({rawQuotations.length})
               </button>
-              {!isStrictFinance && (
-                <>
-                  <button
-                    onClick={() => setFinanceFilter('pending_approval')}
-                    className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${financeFilter === 'pending_approval'
-                      ? 'bg-amber-500 text-white shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                  >
-                    ⏳ Awaiting Approval ({finPaidPendingApprovalCount})
-                  </button>
-                  <button
-                    onClick={() => setFinanceFilter('invoiced')}
-                    className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${financeFilter === 'invoiced'
-                      ? 'bg-purple-600 text-white shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                  >
-                    🧾 Invoiced
-                  </button>
-                  <button
-                    onClick={() => setFinanceFilter('paid')}
-                    className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${financeFilter === 'paid'
-                      ? 'btn-green-45 text-white shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                  >
-                    💳 Paid & Settled
-                  </button>
-                </>
-              )}
+              <button
+                onClick={() => setFinanceFilter('invoiced')}
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${financeFilter === 'invoiced'
+                  ? 'bg-amber-500 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+              >
+                ⏳ Billing Pending ({finBillingPendingCount})
+              </button>
+              <button
+                onClick={() => setFinanceFilter('pending_approval')}
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${financeFilter === 'pending_approval'
+                  ? 'btn-green-45 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+              >
+                💳 Paid • Ready for Ops ({finPaidPendingApprovalCount})
+              </button>
+              <button
+                onClick={() => setFinanceFilter('paid')}
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${financeFilter === 'paid'
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+              >
+                ✅ Handed Over ({finApprovedHandedOverCount})
+              </button>
             </div>
           ) : (
             <div className="flex bg-slate-100/80 dark:bg-dark-950/70 p-1 rounded-xl border border-slate-200/70 dark:border-dark-800 text-xs font-semibold">
@@ -914,14 +918,18 @@ export const OTPipeline: React.FC = () => {
           <div className="space-y-1">
             <h3 className="text-base font-bold text-slate-800 dark:text-white">
               {isStrictFinance
-                ? 'No Paid Leads Awaiting Finance Approval'
+                ? financeFilter === 'pending_approval'
+                  ? 'No Paid Leads Awaiting Handover Approval'
+                  : financeFilter === 'invoiced'
+                    ? 'No Leads with Billing Pending'
+                    : 'No Deals in Finance Track'
                 : isStrictOperation
                   ? 'No Deals Currently in Operations Queue'
                   : 'No Proposals Matching Selected Filter'}
             </h3>
             <p className="text-xs text-slate-500 dark:text-dark-400 max-w-md mx-auto">
               {isStrictFinance
-                ? 'When an invoice status becomes paid, leads automatically arrive here for verification and handover to Operations.'
+                ? 'Deals with accepted proposals appear here for billing, invoice management, and handover approval to Operations.'
                 : isStrictOperation
                   ? 'Leads will appear here as soon as the Finance person approves the payment handover.'
                   : 'Proposals marked Accepted or Invoiced will appear in the pipeline according to role workflows.'}
@@ -1181,7 +1189,7 @@ export const OTPipeline: React.FC = () => {
                           )}
 
                           {/* Action 3: Admin / Finance Bill & Payment triggers */}
-                          {(isAdmin || isManager) && !isPaid && (
+                          {(isStrictFinance || isAdmin || isManager) && !isPaid && (
                             <>
                               {!quote.invoiceId ? (
                                 <button
@@ -1219,52 +1227,52 @@ export const OTPipeline: React.FC = () => {
         departmentTrack === 'finance' ? (
           /* FINANCE TRACK KANBAN */
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Col 1: Uninvoiced proposals (Hidden from strict finance person) */}
-            {!isStrictFinance && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40">
-                  <div className="flex items-center space-x-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-300">
-                      1. Invoicing Pending
-                    </h3>
-                  </div>
-                  <span className="px-2 py-0.5 rounded-full bg-amber-200/60 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 text-xs font-bold">
-                    {rawQuotations.filter(q => !checkIsInvoicePaid(q, parseWorkflow(q)) && !q.invoiceId).length}
-                  </span>
+            {/* Col 1: Invoicing & Billing Pending */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40">
+                <div className="flex items-center space-x-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-300">
+                    1. Invoicing & Billing Pending
+                  </h3>
                 </div>
+                <span className="px-2 py-0.5 rounded-full bg-amber-200/60 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 text-xs font-bold">
+                  {finBillingPendingCount}
+                </span>
+              </div>
 
-                <div className="space-y-3">
-                  {rawQuotations
-                    .filter(q => !checkIsInvoicePaid(q, parseWorkflow(q)) && !q.invoiceId)
-                    .map(quote => {
-                      const lead = quote.leadId;
-                      const clientName = lead?.name || quote.customerId?.name || 'Valued Client';
-                      const quoteId = quote.quotationId || `QT-${quote._id.slice(0, 8).toUpperCase()}`;
+              <div className="space-y-3">
+                {rawQuotations
+                  .filter(q => !checkIsInvoicePaid(q, parseWorkflow(q)))
+                  .map(quote => {
+                    const lead = quote.leadId;
+                    const clientName = lead?.name || quote.customerId?.name || 'Valued Client';
+                    const quoteId = quote.quotationId || `QT-${quote._id.slice(0, 8).toUpperCase()}`;
 
-                      return (
-                        <div
-                          key={`fin-col1-${quote._id}`}
-                          className="p-4 rounded-3xl bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-800 shadow-sm hover:shadow-md transition space-y-3"
-                        >
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <div className="font-bold text-slate-900 dark:text-white text-sm">{clientName}</div>
-                              <div className="text-[11px] text-slate-400 font-mono">{quoteId}</div>
-                            </div>
-                            <button
-                              onClick={() => handleOpenFinanceModal(quote)}
-                              className="p-1 rounded-lg text-slate-400 hover:text-emerald-600 transition cursor-pointer"
-                            >
-                              <Settings2 className="h-4 w-4" />
-                            </button>
+                    return (
+                      <div
+                        key={`fin-col1-${quote._id}`}
+                        className="p-4 rounded-3xl bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-800 shadow-sm hover:shadow-md transition space-y-3"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="font-bold text-slate-900 dark:text-white text-sm">{clientName}</div>
+                            <div className="text-[11px] text-slate-400 font-mono">{quoteId}</div>
                           </div>
+                          <button
+                            onClick={() => handleOpenFinanceModal(quote)}
+                            className="p-1 rounded-lg text-slate-400 hover:text-emerald-600 transition cursor-pointer"
+                          >
+                            <Settings2 className="h-4 w-4" />
+                          </button>
+                        </div>
 
-                          <div className="text-base font-black text-slate-900 dark:text-white">
-                            ₹{Number(quote.totalAmount || 0).toLocaleString('en-IN')}
-                          </div>
+                        <div className="text-base font-black text-slate-900 dark:text-white">
+                          ₹{Number(quote.totalAmount || 0).toLocaleString('en-IN')}
+                        </div>
 
-                          <div className="pt-2 border-t border-slate-100 dark:border-dark-800 flex items-center justify-between">
+                        <div className="pt-2 border-t border-slate-100 dark:border-dark-800 flex items-center justify-between">
+                          {!quote.invoiceId ? (
                             <button
                               onClick={() => convertMutation.mutate(quote._id)}
                               className="px-3 py-1 rounded-xl btn-green-45 text-white text-[11px] font-bold shadow-sm flex items-center space-x-1 cursor-pointer active:scale-95"
@@ -1272,16 +1280,33 @@ export const OTPipeline: React.FC = () => {
                               <Receipt className="h-3 w-3" />
                               <span>Issue Tax Invoice</span>
                             </button>
-                          </div>
+                          ) : (
+                            <div className="flex items-center justify-between w-full">
+                              <Link
+                                to={`/accounting/invoices/${quote.invoiceId._id || quote.invoiceId.id}`}
+                                className="text-[11px] font-bold text-purple-600 hover:underline flex items-center space-x-1"
+                              >
+                                <Receipt className="h-3 w-3" />
+                                <span>{quote.invoiceId.invoiceId || 'Invoice Generated'}</span>
+                              </Link>
+                              <button
+                                onClick={() => markInvoicePaidMutation.mutate(quote)}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[10px] font-bold transition flex items-center space-x-1 cursor-pointer"
+                              >
+                                <CheckCircle2 className="h-3 w-3" />
+                                <span>Mark Paid</span>
+                              </button>
+                            </div>
+                          )}
                         </div>
-                      );
-                    })}
-                </div>
+                      </div>
+                    );
+                  })}
               </div>
-            )}
+            </div>
 
             {/* Col 2: Invoices Paid - Awaiting Finance Approval (CORE QUEUE FOR FINANCE) */}
-            <div className={`space-y-4 ${isStrictFinance ? 'md:col-span-3 max-w-2xl mx-auto w-full' : ''}`}>
+            <div className="space-y-4">
               <div className="flex items-center justify-between p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-300 dark:border-emerald-900/40">
                 <div className="flex items-center space-x-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
@@ -1355,55 +1380,53 @@ export const OTPipeline: React.FC = () => {
               </div>
             </div>
 
-            {/* Col 3: Approved & Handed Over (Admin & Manager only) */}
-            {!isStrictFinance && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 rounded-2xl bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-900/40">
-                  <div className="flex items-center space-x-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-purple-900 dark:text-purple-300">
-                      3. Handed Over to Ops
-                    </h3>
-                  </div>
-                  <span className="px-2 py-0.5 rounded-full bg-purple-200/60 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200 text-xs font-bold">
-                    {finApprovedHandedOverCount}
-                  </span>
+            {/* Col 3: Approved & Handed Over (Finance, Admin & Manager) */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-900/40">
+                <div className="flex items-center space-x-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-purple-900 dark:text-purple-300">
+                    3. Handed Over to Ops
+                  </h3>
                 </div>
-
-                <div className="space-y-3">
-                  {rawQuotations
-                    .filter(q => parseWorkflow(q).financeApproved === true)
-                    .map(quote => {
-                      const lead = quote.leadId;
-                      const clientName = lead?.name || quote.customerId?.name || 'Valued Client';
-                      const wf = parseWorkflow(quote);
-
-                      return (
-                        <div
-                          key={`fin-col3-${quote._id}`}
-                          className="p-4 rounded-3xl bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-800 shadow-sm space-y-3"
-                        >
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <div className="font-bold text-slate-900 dark:text-white text-sm">{clientName}</div>
-                              <div className="text-[11px] text-emerald-600 font-mono font-bold">
-                                Approved by {wf.financeApprovedBy || 'Finance'}
-                              </div>
-                            </div>
-                            <span className="p-1 rounded-full bg-emerald-100 text-emerald-700">
-                              <CheckCircle2 className="h-4 w-4" />
-                            </span>
-                          </div>
-
-                          <div className="text-xs text-slate-500">
-                            Active in Operations: {wf.opsStatus === 'completed' ? 'Delivered' : 'In Execution'}
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
+                <span className="px-2 py-0.5 rounded-full bg-purple-200/60 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200 text-xs font-bold">
+                  {finApprovedHandedOverCount}
+                </span>
               </div>
-            )}
+
+              <div className="space-y-3">
+                {rawQuotations
+                  .filter(q => parseWorkflow(q).financeApproved === true)
+                  .map(quote => {
+                    const lead = quote.leadId;
+                    const clientName = lead?.name || quote.customerId?.name || 'Valued Client';
+                    const wf = parseWorkflow(quote);
+
+                    return (
+                      <div
+                        key={`fin-col3-${quote._id}`}
+                        className="p-4 rounded-3xl bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-800 shadow-sm space-y-3"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="font-bold text-slate-900 dark:text-white text-sm">{clientName}</div>
+                            <div className="text-[11px] text-emerald-600 font-mono font-bold">
+                              Approved by {wf.financeApprovedBy || 'Finance'}
+                            </div>
+                          </div>
+                          <span className="p-1 rounded-full bg-emerald-100 text-emerald-700">
+                            <CheckCircle2 className="h-4 w-4" />
+                          </span>
+                        </div>
+
+                        <div className="text-xs text-slate-500">
+                          Active in Operations: {wf.opsStatus === 'completed' ? 'Delivered' : 'In Execution'}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
           </div>
         ) : (
           /* OPERATIONS TRACK KANBAN (STRICTLY APPROVED DEALS ONLY) */

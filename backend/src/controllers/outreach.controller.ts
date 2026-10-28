@@ -25,7 +25,7 @@ export async function getFollowUps(req: Request, res: Response, next: NextFuncti
   try {
     const orgId = req.organizationId;
     const userRole = (req as any).userRole;
-    const isPrivileged = ['Admin', 'Super Admin', 'Manager', 'Team Leader'].includes(userRole) || req.user?.email === 'shivamthakur12012@gmail.com';
+    const isPrivileged = ['Admin', 'Super Admin', 'Manager', 'Team Leader'].includes(userRole) || ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(req.user?.email || '');
     const userId = req.user?.id;
     const { status, channel, period, assignedTo, leadId, customerId } = req.query;
 
@@ -80,6 +80,9 @@ export async function getFollowUps(req: Request, res: Response, next: NextFuncti
     } else if (period === 'overdue') {
       query.date = { $lt: todayStart };
       if (!query.status) query.status = 'pending';
+    } else if (period === 'pending') {
+      query.date = { $lte: todayEnd };
+      if (!query.status) query.status = 'pending';
     }
 
     const statsQuery: any = { organizationId: orgId };
@@ -123,6 +126,7 @@ export async function getFollowUps(req: Request, res: Response, next: NextFuncti
     let completedCount = 0;
     let todayDueCount = 0;
     let overdueCount = 0;
+    let upcomingCount = 0;
 
     for (const f of validForStats) {
       totalCount++;
@@ -134,10 +138,14 @@ export async function getFollowUps(req: Request, res: Response, next: NextFuncti
       if (f.status === 'completed') {
         completedCount++;
       } else {
-        pendingCount++;
         const fDate = new Date(f.date);
-        if (fDate >= todayStart && fDate <= todayEnd) todayDueCount++;
-        else if (fDate < todayStart) overdueCount++;
+        if (fDate > todayEnd) {
+          upcomingCount++;
+        } else {
+          pendingCount++;
+          if (fDate >= todayStart && fDate <= todayEnd) todayDueCount++;
+          else if (fDate < todayStart) overdueCount++;
+        }
       }
     }
 
@@ -150,6 +158,7 @@ export async function getFollowUps(req: Request, res: Response, next: NextFuncti
         email: emailCount,
         phone: phoneCount,
         pending: pendingCount,
+        upcoming: upcomingCount,
         completed: completedCount,
         todayDue: todayDueCount,
         overdue: overdueCount
@@ -191,7 +200,7 @@ export async function createFollowUp(req: Request, res: Response, next: NextFunc
   try {
     const orgId = req.organizationId;
     const userRole = (req as any).userRole;
-    const isPrivileged = ['Admin', 'Super Admin', 'Manager', 'Team Leader'].includes(userRole) || req.user?.email === 'shivamthakur12012@gmail.com';
+    const isPrivileged = ['Admin', 'Super Admin', 'Manager', 'Team Leader'].includes(userRole) || ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(req.user?.email || '');
     const userId = req.user?.id;
     const { 
       leadId, customerId, contactId, assignedTo, 

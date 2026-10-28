@@ -1,4 +1,4 @@
-import prisma from './prisma';
+import prisma, { pool } from './prisma';
 import logger from '../utils/logger';
 
 let keepAliveInterval: NodeJS.Timeout | null = null;
@@ -61,4 +61,9 @@ export async function connectDB() {
 export async function disconnectDB() {
   stopDBKeepAlive();
   await prisma.$disconnect();
+  try {
+    await pool.end();
+  } catch (err) {
+    logger.warn('Error closing pg pool:', err);
+  }
 }

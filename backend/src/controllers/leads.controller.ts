@@ -10,13 +10,18 @@ import { UserOrganizationRole } from '../models/UserOrganizationRole';
 import { Role } from '../models/Role';
 import { User } from '../models/User';
 import { AuditLog } from '../models/AuditLog';
+import { CallLog } from '../models/CallLog';
+import { FollowUp } from '../models/FollowUp';
 import { WorkflowService } from '../services/workflow.service';
 import prisma from '../config/prisma';
 import logger from '../utils/logger';
 
-// Phone number validator regex (10-15 digits, optional + prefix)
 const PHONE_REGEX = /^\+?[0-9\s\-()]{10,18}$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const ADMIN_EMAILS = ['shivamthakur12012@gmail.com', 'shivam.arthaventures@gmail.com'];
+const isMasterAdmin = (email?: string) => ADMIN_EMAILS.includes((email || '').toLowerCase().trim());
+const isSystemAdmin = (role?: string, email?: string) => ['Admin', 'Super Admin'].includes(role || '') || isMasterAdmin(email);
 
 // Helper: Automatic Round Robin Lead Assignment (4-Level Hierarchy)
 export async function assignLeadRoundRobin(organizationId: string): Promise<string | undefined> {
@@ -93,11 +98,9 @@ export async function getLeads(req: Request, res: Response, next: NextFunction) 
 
     const isTodayMode = todayOnly === 'true' || String(status).toLowerCase() === 'today' || String(status).toLowerCase() === 'today_assigned';
 
-    // Role-based scoping (4-Level Hierarchy)
-    // Level 1: Admin, Level 2: Manager, Level 3: Team Leader -> Privileged
-    // Level 4: Sale Executive -> Sees assigned leads
+    // Role-based scoping (Core Hierarchy: Admin, Manager -> Privileged; Sale Executive -> Assigned leads)
     const userRole = (req as any).userRole;
-    const isPrivileged = ['Super Admin', 'Admin', 'Manager', 'Team Leader'].includes(userRole) || req.user?.email === 'shivamthakur12012@gmail.com';
+    const isPrivileged = isSystemAdmin(userRole, req.user?.email) || userRole === 'Manager';
 
     if (!isPrivileged) {
       query.assignedTo = req.user?.id;
@@ -138,8 +141,11 @@ export async function getLeads(req: Request, res: Response, next: NextFunction) 
         query.status = { $in: ['Converted', 'converted', 'CONVERTED'] };
       } else if (s === 'lost') {
         query.status = { $in: ['Lost', 'lost', 'LOST'] };
-      } else if (s === 'all') {
-        // All leads
+      } else if (s === 'everything' || s === 'all_statuses' || s === 'all' || s === 'leads') {
+        // All leads across all statuses (all lead pipeline tracks)
+      } else if (s === 'open' || s === 'active') {
+        // Active Leads pipeline: strictly exclude Converted and Lost leads
+        query.status = { $nin: ['Converted', 'converted', 'CONVERTED', 'Lost', 'lost', 'LOST'] };
       } else {
         query.status = status;
       }
@@ -170,12 +176,6 @@ export async function getLeads(req: Request, res: Response, next: NextFunction) 
             { convertedInvoiceId: { $ne: null } },
             { leadType: { $in: ['Invoiced', 'Invoiced & Billed'] } }
           ];
-        } else if (activeSubStage === 'High Value') {
-          query.$or = [
-            { expectedValue: { $gte: 25000 } },
-            { priority: { $in: ['High', 'Urgent', 'high', 'urgent'] } },
-            { leadType: 'High Value' }
-          ];
         } else if (activeSubStage === 'Direct Won') {
           query.$or = [
             { leadType: 'Direct Won' },
@@ -204,8 +204,8 @@ export async function getLeads(req: Request, res: Response, next: NextFunction) 
       }
     }
 
-    // Unassigned filter
-    if (unassignedOnly === 'true') {
+    // Unassigned filter (Privileged Admins & Managers only)
+    if (unassignedOnly === 'true' && isPrivileged) {
       query.assignedTo = { $in: [null, undefined] };
     }
 
@@ -255,6 +255,12 @@ export async function getLeads(req: Request, res: Response, next: NextFunction) 
         { _id: { $in: todayAssignedIds } }
       ]
     };
+
+    // Auto-migrate any legacy removed sub-stages in open leads to 'In Process'
+    await Lead.updateMany(
+      { organizationId: orgId, leadType: { $in: ['Payment Expected', 'Payment Remaining', 'Negotiation', 'Payment'] } },
+      { $set: { leadType: 'In Process' } }
+    );
 
     // Parallel optimized fetching: query + total count + status breakdown + today count + open sub-stages + lost reasons + converted sub-stages in 1 parallel round-trip
     const [leads, total, statusGroups, unassignedCount, todayCount, openLeadsForSubStages, lostLeadsForReasons, convertedLeadsForStages] = await Promise.all([
@@ -316,20 +322,16 @@ export async function getLeads(req: Request, res: Response, next: NextFunction) 
     const subStageCounts: Record<string, number> = {
       'In Process': 0,
       'Qualified': 0,
-      'Proposal Sent': 0,
-      'Negotiation': 0
+      'Proposal Sent': 0
     };
 
     for (const l of openLeadsForSubStages) {
-      const stageKey = l.leadType || 'In Process';
-      if (subStageCounts[stageKey] !== undefined) {
-        subStageCounts[stageKey]++;
-      } else if (stageKey.toLowerCase().includes('qualif')) {
+      const stageKey = (l.leadType || 'In Process').trim();
+      const sk = stageKey.toLowerCase();
+      if (sk.includes('qualif')) {
         subStageCounts['Qualified']++;
-      } else if (stageKey.toLowerCase().includes('proposal') || stageKey.toLowerCase().includes('send')) {
+      } else if (sk.includes('proposal') || sk.includes('send') || sk.includes('sent')) {
         subStageCounts['Proposal Sent']++;
-      } else if (stageKey.toLowerCase().includes('negot')) {
-        subStageCounts['Negotiation']++;
       } else {
         subStageCounts['In Process']++;
       }
@@ -361,33 +363,45 @@ export async function getLeads(req: Request, res: Response, next: NextFunction) 
       }
     }
 
-    // Converted sub-stages breakdown for converted leads
+    // Converted sub-stages breakdown for converted leads (Direct Won, Quotation Won, Invoiced)
     const convertedStageCounts: Record<string, number> = {
-      'Quotation Won': 0,
-      'Invoiced': 0,
       'Direct Won': 0,
-      'High Value': 0
+      'Quotation Won': 0,
+      'Invoiced': 0
     };
 
     for (const l of convertedLeadsForStages) {
-      const isHighVal = (l.expectedValue && l.expectedValue >= 25000) || ['high', 'urgent', 'High', 'Urgent'].includes(l.priority);
-      if (isHighVal) convertedStageCounts['High Value']++;
+      const hasInvoice = Array.isArray(l.convertedInvoiceId) ? l.convertedInvoiceId.length > 0 : Boolean(l.convertedInvoiceId);
+      const hasQuotation = Array.isArray(l.convertedQuotationId) ? l.convertedQuotationId.length > 0 : Boolean(l.convertedQuotationId);
+      const lt = (l.leadType || '').toLowerCase();
 
-      if (l.convertedInvoiceId || l.leadType === 'Invoiced' || l.leadType === 'Invoiced & Billed') {
+      if (hasInvoice || lt.includes('invoiced') || lt.includes('billed')) {
         convertedStageCounts['Invoiced']++;
-      } else if (l.convertedQuotationId || l.leadType === 'Quotation Won') {
+      } else if (hasQuotation || lt === 'quotation won' || lt.includes('quotation')) {
         convertedStageCounts['Quotation Won']++;
-      } else if (l.leadType === 'High Value') {
-        convertedStageCounts['High Value']++;
       } else {
         convertedStageCounts['Direct Won']++;
       }
     }
 
+    const enrichedLeads = leads.map((l: any) => {
+      const leadObj = typeof l.toObject === 'function' ? l.toObject() : { ...l };
+      const custom = (leadObj.customFields && typeof leadObj.customFields === 'object') ? leadObj.customFields : {};
+      const expected = Number(custom.paymentExpected ?? leadObj.expectedValue ?? (leadObj.convertedQuotationId?.totalAmount) ?? (leadObj.convertedInvoiceId?.totalAmount) ?? 0);
+      const completed = Number(custom.paymentReceived ?? (leadObj.convertedInvoiceId ? ((leadObj.convertedInvoiceId.totalAmount || 0) - (leadObj.convertedInvoiceId.outstandingBalance || 0)) : 0));
+      const due = Math.max(0, expected - completed);
+      return {
+        ...leadObj,
+        paymentExpected: expected,
+        paymentReceived: completed,
+        paymentDue: due
+      };
+    });
+
     return res.json({
       success: true,
       data: {
-        leads,
+        leads: enrichedLeads,
         counts: {
           all: allCount,
           new: newCount,
@@ -482,7 +496,7 @@ export async function getLead(req: Request, res: Response, next: NextFunction) {
 
     // Scoping check for non-privileged employee
     const userRole = (req as any).userRole;
-    const isPrivileged = ['Admin', 'Super Admin', 'Manager', 'Team Leader'].includes(userRole) || req.user?.email === 'shivamthakur12012@gmail.com';
+    const isPrivileged = isSystemAdmin(userRole, req.user?.email) || userRole === 'Manager';
     const assignedId = (typeof lead.assignedTo === 'object' && lead.assignedTo) ? ((lead.assignedTo as any)._id || (lead.assignedTo as any).id)?.toString() : lead.assignedTo?.toString();
     if (!isPrivileged && (!assignedId || assignedId !== req.user?.id)) {
       return res.status(403).json({
@@ -497,6 +511,56 @@ export async function getLead(req: Request, res: Response, next: NextFunction) {
       .populate('userId', 'firstName lastName email')
       .sort({ createdAt: -1 });
 
+    // Also fetch CallLogs for this lead to ensure calls by previous or current employees are maintained
+    const callLogs = await CallLog.find({ leadId: lead._id, organizationId: orgId })
+      .populate('employeeId', 'firstName lastName email')
+      .sort({ startTime: -1, createdAt: -1 });
+
+    const existingCallTimestamps = new Set(
+      activities
+        .filter((a: any) => a.type === 'call' || a.type === 'phone')
+        .map((a: any) => Math.floor(new Date(a.createdAt).getTime() / 60000))
+    );
+
+    const syntheticCallActivities: any[] = [];
+    for (const c of callLogs) {
+      const callDate = c.startTime || c.createdAt;
+      const minKey = Math.floor(new Date(callDate).getTime() / 60000);
+      if (!existingCallTimestamps.has(minKey)) {
+        const emp = c.employeeId as any;
+        const empName = emp ? `${emp.firstName || ''} ${emp.lastName || ''}`.trim() : 'Sales Agent';
+        syntheticCallActivities.push({
+          _id: c._id || c.id,
+          id: c._id || c.id,
+          organizationId: orgId,
+          leadId: lead._id,
+          userId: emp ? {
+            _id: emp._id || emp.id,
+            id: emp._id || emp.id,
+            firstName: emp.firstName,
+            lastName: emp.lastName,
+            email: emp.email
+          } : null,
+          type: 'call',
+          content: `📱 Phone Call (${c.direction === 'inbound' ? 'INCOMING' : 'OUTGOING'}): ${c.duration || 0}s duration. Outcome: ${c.outcome || 'Connected'}.${c.notes ? `\nNotes: "${c.notes}"` : ''} Logged by ${empName}.`,
+          metadata: {
+            channel: 'phone',
+            duration: c.duration || 0,
+            outcome: c.outcome || 'Connected',
+            callType: c.direction === 'inbound' ? 'INCOMING' : 'OUTGOING',
+            phoneNumber: c.phoneNumber,
+            source: c.provider || 'manual'
+          },
+          createdAt: callDate,
+          updatedAt: callDate
+        });
+      }
+    }
+
+    const mergedActivities = [...activities, ...syntheticCallActivities].sort(
+      (a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
     // Fetch linked quotations
     const quotations = await Quotation.find({ leadId: lead._id, organizationId: orgId, isDeleted: false })
       .populate('createdBy', 'firstName lastName')
@@ -509,11 +573,20 @@ export async function getLead(req: Request, res: Response, next: NextFunction) {
       .populate('toUserId', 'firstName lastName')
       .sort({ createdAt: -1 });
 
+    const leadObj = typeof lead.toObject === 'function' ? lead.toObject() : { ...lead };
+    const custom = (leadObj.customFields && typeof leadObj.customFields === 'object') ? leadObj.customFields : {};
+    const expected = Number(custom.paymentExpected ?? leadObj.expectedValue ?? (leadObj.convertedQuotationId?.totalAmount) ?? (leadObj.convertedInvoiceId?.totalAmount) ?? 0);
+    const completed = Number(custom.paymentReceived ?? (leadObj.convertedInvoiceId ? ((leadObj.convertedInvoiceId.totalAmount || 0) - (leadObj.convertedInvoiceId.outstandingBalance || 0)) : 0));
+    const due = Math.max(0, expected - completed);
+    leadObj.paymentExpected = expected;
+    leadObj.paymentReceived = completed;
+    leadObj.paymentDue = due;
+
     return res.json({
       success: true,
       data: {
-        lead,
-        activities,
+        lead: leadObj,
+        activities: mergedActivities,
         quotations,
         assignmentLogs
       }
@@ -527,11 +600,11 @@ export async function getLead(req: Request, res: Response, next: NextFunction) {
 export async function createLead(req: Request, res: Response, next: NextFunction) {
   try {
     const userRole = (req as any).userRole;
-    const isPrivileged = ['Admin', 'Super Admin', 'Manager', 'Team Leader'].includes(userRole) || req.user?.email === 'shivamthakur12012@gmail.com';
+    const isPrivileged = isSystemAdmin(userRole, req.user?.email) || userRole === 'Manager';
     if (!isPrivileged) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied. Sale Executives cannot create leads directly. Only Admins, Managers, and Team Leaders have permission.',
+        message: 'Access denied. Sale Executives cannot create leads directly. Only Admins and Managers have permission.',
         errorCode: 'FORBIDDEN_CANNOT_CREATE_LEAD'
       });
     }
@@ -692,7 +765,7 @@ export async function updateLead(req: Request, res: Response, next: NextFunction
 
     // Scoping check for non-privileged employee
     const userRole = (req as any).userRole;
-    const isPrivileged = ['Admin', 'Super Admin', 'Manager', 'Team Leader'].includes(userRole) || req.user?.email === 'shivamthakur12012@gmail.com';
+    const isPrivileged = isSystemAdmin(userRole, req.user?.email) || userRole === 'Manager';
     const assignedId = (typeof lead.assignedTo === 'object' && lead.assignedTo) ? ((lead.assignedTo as any)._id || (lead.assignedTo as any).id)?.toString() : lead.assignedTo?.toString();
     if (!isPrivileged && (!assignedId || assignedId !== req.user?.id)) {
       return res.status(403).json({
@@ -706,15 +779,39 @@ export async function updateLead(req: Request, res: Response, next: NextFunction
       delete updates.assignedTo;
     }
 
+    // 0. Permission Check: Once filled, standard employees cannot edit 'paymentExpected' or 'expectedValue'
+    const rawExistingCustom = lead.customFields;
+    const existingCustom: Record<string, any> = (rawExistingCustom && typeof rawExistingCustom === 'object' && !Array.isArray(rawExistingCustom))
+      ? { ...(rawExistingCustom as Record<string, any>) }
+      : {};
+    const existingExpected = Number(existingCustom.paymentExpected ?? lead.expectedValue ?? 0);
+
+    if (!isPrivileged && existingExpected > 0) {
+      if (updates.paymentExpected !== undefined && Number(updates.paymentExpected) !== existingExpected) {
+        return res.status(403).json({
+          success: false,
+          message: `Access denied. Once Payment Expected has been filled (₹${existingExpected.toLocaleString('en-IN')}), standard employees cannot edit it. Only Admins can modify Expected Payment. You can still record Payment Received.`,
+          errorCode: 'PAYMENT_EXPECTED_LOCKED'
+        });
+      }
+      if (updates.expectedValue !== undefined && Number(updates.expectedValue) !== existingExpected) {
+        return res.status(403).json({
+          success: false,
+          message: `Access denied. Once Payment Expected has been filled (₹${existingExpected.toLocaleString('en-IN')}), standard employees cannot edit it. Only Admins can modify Expected Payment.`,
+          errorCode: 'PAYMENT_EXPECTED_LOCKED'
+        });
+      }
+    }
+
     let statusTransitionLoggedNotes = false;
 
     // 1. Workflow State Machine & Admin Position Dispatch
     if (updates.status && updates.status !== lead.status) {
-      // If previously converted or lost, non-privileged standard employees cannot edit without admin reopen
-      if ((lead.status === 'Converted' || lead.status === 'Lost') && !isPrivileged) {
+      // If previously converted, non-privileged standard employees cannot edit without admin override/reason
+      if (lead.status === 'Converted' && !isPrivileged && !updates.adminOverrideReason && !updates.reason) {
         return res.status(400).json({
           success: false,
-          message: `This lead is marked as "${lead.status}" and is locked from direct status edits. Admin must use the "Reopen Lead" or dispatch action.`,
+          message: `This lead is marked as "Converted" and is locked from direct status edits. Admin must use the "Reopen Lead" or dispatch action.`,
           errorCode: 'LEAD_LOCKED'
         });
       }
@@ -726,6 +823,15 @@ export async function updateLead(req: Request, res: Response, next: NextFunction
           message: 'An assigned employee is required before moving a lead from "New" to "Open".',
           errorCode: 'ASSIGNMENT_REQUIRED'
         });
+      }
+
+      // Moving from Lost to active pipeline (Reopen / Dispatch)
+      if (lead.status === 'Lost' && (updates.status === 'Open' || updates.status === 'New')) {
+        lead.lostReason = null;
+        lead.lostNotes = null;
+        lead.reopenedAt = new Date();
+        lead.reopenedBy = userId as any;
+        lead.reopenedReason = updates.transitionNotes || updates.notes || 'Dispatched back to active pipeline';
       }
 
       // Moving to New (Reset / Fresh Pipeline)
@@ -760,10 +866,27 @@ export async function updateLead(req: Request, res: Response, next: NextFunction
         lead.convertedAt = null;
         lead.convertedBy = null;
         lead.convertedQuotationId = null;
+        lead.leadType = null;
       }
 
       // Moving to Converted
       if (updates.status === 'Converted') {
+        // Validation: Required payment expected when moving into Converted from another stage
+        if (lead.status !== 'Converted') {
+          const expectedInput = updates.paymentExpected !== undefined
+            ? Number(updates.paymentExpected)
+            : (updates.expectedValue !== undefined ? Number(updates.expectedValue) : Number(lead.expectedValue || (lead.customFields as any)?.paymentExpected || 0));
+
+          if (!expectedInput || expectedInput <= 0) {
+            return res.status(400).json({
+              success: false,
+              requiresPaymentExpected: true,
+              message: 'Payment Expected amount is required when moving a lead to the Converted stage.',
+              errorCode: 'PAYMENT_EXPECTED_REQUIRED'
+            });
+          }
+        }
+
         const acceptedQuote = await Quotation.findOne({
           leadId: lead._id,
           organizationId: orgId,
@@ -821,6 +944,12 @@ export async function updateLead(req: Request, res: Response, next: NextFunction
       const assignedUser = await User.findById(updates.assignedTo);
       const repName = assignedUser ? `${assignedUser.firstName} ${assignedUser.lastName}` : 'Sales Agent';
 
+      let oldRepName = '';
+      if (oldRep) {
+        const oldUser = await User.findById(oldRep);
+        if (oldUser) oldRepName = `${oldUser.firstName} ${oldUser.lastName}`;
+      }
+
       await AssignmentLog.create({
         organizationId: orgId,
         leadId: lead._id,
@@ -828,17 +957,28 @@ export async function updateLead(req: Request, res: Response, next: NextFunction
         fromUserId: oldRep,
         toUserId: updates.assignedTo,
         ruleApplied: 'manual_reassign',
-        reason: updates.assignmentReason || 'Reassigned by Admin'
+        reason: updates.assignmentReason || (oldRepName ? `Reassigned from ${oldRepName} to ${repName}` : `Assigned to ${repName}`)
       });
+
+      const reassignmentContent = oldRepName
+        ? `Lead reassigned from ${oldRepName} to ${repName} by Admin. All past activities, notes, and call records of ${oldRepName} are preserved.`
+        : `Lead assigned to ${repName} by Admin.`;
 
       await Activity.create({
         organizationId: orgId,
         leadId: lead._id,
         userId,
         type: 'assignment_change',
-        content: `Reassigned to ${repName} by Admin.`,
-        metadata: { fromRep: oldRep, toRep: updates.assignedTo }
+        content: reassignmentContent,
+        metadata: { fromRep: oldRep, toRep: updates.assignedTo, fromRepName: oldRepName, toRepName: repName }
       });
+
+      // Maintain past activities and completed follow-ups intact with original employee!
+      // Safely transfer pending follow-ups to the new assignee so upcoming scheduled calls are not missed
+      await FollowUp.updateMany(
+        { leadId: lead._id, organizationId: orgId, status: 'pending' },
+        { assignedTo: updates.assignedTo }
+      );
     }
 
     // 3. Update fields
@@ -855,12 +995,70 @@ export async function updateLead(req: Request, res: Response, next: NextFunction
     if (updates.expectedValue !== undefined) lead.expectedValue = Number(updates.expectedValue);
     if (updates.location !== undefined) lead.location = updates.location;
     if (updates.tags) lead.tags = updates.tags;
+    if (updates.lostReason !== undefined) lead.lostReason = updates.lostReason;
+    if (updates.lostNotes !== undefined) lead.lostNotes = updates.lostNotes;
     if (updates.nextFollowUp !== undefined) lead.nextFollowUp = updates.nextFollowUp ? new Date(updates.nextFollowUp) : null;
     if (updates.lastFollowUpDate !== undefined) lead.lastFollowUpDate = updates.lastFollowUpDate ? new Date(updates.lastFollowUpDate) : null;
 
-    // Track sub-stage (In Process, Qualified, Proposal Sent, Negotiation)
+    // Payment Tracking: paymentExpected & paymentReceived
+    if (updates.paymentExpected !== undefined || updates.paymentReceived !== undefined) {
+      const rawCustom = lead.customFields;
+      const custom: Record<string, any> = (rawCustom && typeof rawCustom === 'object' && !Array.isArray(rawCustom))
+        ? { ...(rawCustom as Record<string, any>) }
+        : {};
+      const oldReceived = Number(custom.paymentReceived ?? 0);
+
+      if (updates.paymentExpected !== undefined) {
+        const exp = Math.max(0, Number(updates.paymentExpected) || 0);
+        custom.paymentExpected = exp;
+        lead.expectedValue = exp;
+      }
+      if (updates.paymentReceived !== undefined) {
+        const rec = Math.max(0, Number(updates.paymentReceived) || 0);
+        custom.paymentReceived = rec;
+      }
+
+      const totalExp = Number(custom.paymentExpected ?? lead.expectedValue ?? 0);
+      const totalRec = Number(custom.paymentReceived ?? 0);
+      const calculatedDue = Math.max(0, totalExp - totalRec);
+      custom.paymentDue = calculatedDue;
+      lead.customFields = custom;
+
+      if (updates.paymentReceived !== undefined && oldReceived !== totalRec) {
+        await Activity.create({
+          organizationId: orgId,
+          leadId: lead._id,
+          userId,
+          type: 'payment_update',
+          content: `Payment collection updated: Completed ₹${totalRec.toLocaleString('en-IN')}, Remaining Due: ₹${calculatedDue.toLocaleString('en-IN')}.`,
+          metadata: { paymentExpected: totalExp, paymentReceived: totalRec, paymentDue: calculatedDue }
+        });
+      }
+    }
+
+    // Track sub-stage (In Process, Qualified, Proposal Sent, Negotiation, Direct Won, Quotation Won, Invoiced)
     if (updates.subStage !== undefined || updates.leadType !== undefined) {
       const newSubStage = updates.subStage || updates.leadType;
+
+      // Strict Rule: Leads can only go to Invoiced when payment due is <= 0
+      if (newSubStage === 'Invoiced' || newSubStage === 'Invoiced & Billed') {
+        const rawCustom = lead.customFields;
+        const custom: Record<string, any> = (rawCustom && typeof rawCustom === 'object' && !Array.isArray(rawCustom))
+          ? { ...(rawCustom as Record<string, any>) }
+          : {};
+        const totalExp = Number(updates.paymentExpected !== undefined ? updates.paymentExpected : (custom.paymentExpected ?? lead.expectedValue ?? 0));
+        const totalRec = Number(updates.paymentReceived !== undefined ? updates.paymentReceived : (custom.paymentReceived ?? 0));
+        const due = Math.max(0, totalExp - totalRec);
+
+        if (due > 0) {
+          return res.status(400).json({
+            success: false,
+            message: `Cannot move lead to Invoiced: Outstanding payment due is ₹${due.toLocaleString('en-IN')}. Payment due must be ₹0 or less before moving to Invoiced.`,
+            errorCode: 'PAYMENT_DUE_NOT_ZERO'
+          });
+        }
+      }
+
       const oldSubStage = lead.leadType || 'In Process';
       lead.leadType = newSubStage;
       if (oldSubStage !== newSubStage) {
@@ -892,10 +1090,16 @@ export async function updateLead(req: Request, res: Response, next: NextFunction
     lead.version = (lead.version || 1) + 1;
     await lead.save();
 
+    const leadObj = typeof lead.toObject === 'function' ? lead.toObject() : { ...lead };
+    const custom = (leadObj.customFields && typeof leadObj.customFields === 'object') ? leadObj.customFields : {};
+    leadObj.paymentExpected = Number(custom.paymentExpected ?? leadObj.expectedValue ?? 0);
+    leadObj.paymentReceived = Number(custom.paymentReceived ?? 0);
+    leadObj.paymentDue = Math.max(0, leadObj.paymentExpected - leadObj.paymentReceived);
+
     return res.json({
       success: true,
       message: 'Lead updated successfully.',
-      data: lead
+      data: leadObj
     });
   } catch (error) {
     next(error);
@@ -979,11 +1183,20 @@ export async function assignLeads(req: Request, res: Response, next: NextFunctio
 
     for (const lead of leads) {
       const oldRep = lead.assignedTo;
+      if (oldRep && oldRep.toString() === assignedTo.toString()) {
+        continue; // Already assigned to this representative
+      }
       lead.assignedTo = assignedTo;
       if (lead.status === 'New') {
         lead.status = 'Open';
       }
       if ((lead as any).save) await (lead as any).save();
+
+      let oldRepName = '';
+      if (oldRep) {
+        const oldUser = await User.findById(oldRep);
+        if (oldUser) oldRepName = `${oldUser.firstName} ${oldUser.lastName}`;
+      }
 
       await AssignmentLog.create({
         organizationId: orgId,
@@ -992,17 +1205,28 @@ export async function assignLeads(req: Request, res: Response, next: NextFunctio
         fromUserId: oldRep,
         toUserId: assignedTo,
         ruleApplied: 'manual_admin',
-        reason
+        reason: reason || (oldRepName ? `Reassigned from ${oldRepName} to ${repName}` : `Assigned to ${repName}`)
       });
+
+      const assignmentContent = oldRepName
+        ? `Lead reassigned from ${oldRepName} to ${repName} by Admin. All past activities, notes, and call records of ${oldRepName} are preserved.`
+        : `Lead assigned to ${repName} by Admin.`;
 
       await Activity.create({
         organizationId: orgId,
         leadId: lead._id,
         userId,
         type: 'assignment_change',
-        content: `Lead assigned to ${repName} by Admin.`,
-        metadata: { fromRep: oldRep, toRep: assignedTo }
+        content: assignmentContent,
+        metadata: { fromRep: oldRep, toRep: assignedTo, fromRepName: oldRepName, toRepName: repName }
       });
+
+      // Maintain past activities and completed follow-ups intact with original employee!
+      // Safely transfer pending follow-ups to the new assignee so upcoming scheduled calls are not missed
+      await FollowUp.updateMany(
+        { leadId: lead._id, organizationId: orgId, status: 'pending' },
+        { assignedTo }
+      );
     }
 
     return res.json({
@@ -1054,11 +1278,11 @@ export async function bulkUpdateLeads(req: Request, res: Response, next: NextFun
 export async function bulkUploadLeads(req: Request, res: Response, next: NextFunction) {
   try {
     const userRole = (req as any).userRole;
-    const isPrivileged = ['Admin', 'Super Admin', 'Manager', 'Team Leader'].includes(userRole) || req.user?.email === 'shivamthakur12012@gmail.com';
+    const isPrivileged = isSystemAdmin(userRole, req.user?.email) || userRole === 'Manager';
     if (!isPrivileged) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied. Only Admins, Managers, and Team Leaders are permitted to bulk upload leads.',
+        message: 'Access denied. Only Admins and Managers are permitted to bulk upload leads.',
         errorCode: 'FORBIDDEN'
       });
     }
@@ -1189,11 +1413,11 @@ export async function bulkUploadLeads(req: Request, res: Response, next: NextFun
 // 10. DOWNLOAD BULK TEMPLATE CSV
 export function getBulkTemplate(req: Request, res: Response) {
   const userRole = (req as any).userRole;
-  const isPrivileged = ['Admin', 'Super Admin', 'Manager', 'Team Leader'].includes(userRole) || (req as any).user?.email === 'shivamthakur12012@gmail.com';
+  const isPrivileged = isSystemAdmin(userRole, (req as any).user?.email) || userRole === 'Manager';
   if (!isPrivileged) {
     return res.status(403).json({
       success: false,
-      message: 'Access denied. Only Admins, Managers, and Team Leaders can download the bulk template.',
+      message: 'Access denied. Only Admins and Managers can download the bulk template.',
       errorCode: 'FORBIDDEN'
     });
   }
@@ -1212,7 +1436,7 @@ export async function getAssignmentLogs(req: Request, res: Response, next: NextF
   try {
     const orgId = req.organizationId;
     const userRole = (req as any).userRole;
-    const isAdmin = ['Admin', 'Super Admin'].includes(userRole) || req.user?.email === 'shivamthakur12012@gmail.com';
+    const isAdmin = isSystemAdmin(userRole, req.user?.email);
     const { page = 1, limit = 50 } = req.query;
 
     const skipIndex = (Number(page) - 1) * Number(limit);
@@ -1271,7 +1495,8 @@ export async function getAssignmentLogs(req: Request, res: Response, next: NextF
 export async function getImportLogs(req: Request, res: Response, next: NextFunction) {
   try {
     const userRole = (req as any).userRole;
-    if (!['Super Admin', 'Manager'].includes(userRole)) {
+    const isAuthorized = isSystemAdmin(userRole, req.user?.email) || userRole === 'Manager';
+    if (!isAuthorized) {
       return res.status(403).json({
         success: false,
         message: 'Access denied. Only Admins and Managers can view import logs.',

@@ -138,18 +138,18 @@ export function checkFeature(feature: 'email' | 'whatsapp' | 'instagram' | 'phon
 }
 
 /**
- * Restricts endpoint strictly to Super Admin / Platform Admin (shivamthakur12012@gmail.com)
+ * Restricts endpoint strictly to Platform Admins (shivamthakur12012@gmail.com & shivam.arthaventures@gmail.com)
  */
 export function platformAdminOnly(req: Request, res: Response, next: NextFunction) {
   const user = req.user as any;
-  // Strictly restricted to shivamthakur12012@gmail.com
-  if (user?.email === 'shivamthakur12012@gmail.com') {
+  const adminEmails = ['shivamthakur12012@gmail.com', 'shivam.arthaventures@gmail.com'];
+  if (adminEmails.includes((user?.email || '').toLowerCase().trim()) || (req as any).userRole === 'Admin' || (req as any).userRole === 'Super Admin') {
     return next();
   }
 
   return res.status(403).json({
     success: false,
-    message: 'Access denied: Platform Administrator privileges strictly reserved for shivamthakur12012@gmail.com.',
+    message: 'Access denied: Platform Administrator privileges strictly reserved for System Admins.',
     errorCode: 'FORBIDDEN_PLATFORM_ADMIN'
   });
 }
