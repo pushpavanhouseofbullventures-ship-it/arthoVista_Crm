@@ -37,7 +37,12 @@ class LocalDiskStorageProvider implements StorageProvider {
   }
 
   async deleteFile(key: string): Promise<void> {
-    const filePath = path.join(this.uploadDir, key);
+    const safeKey = path.normalize(key).replace(/^(\.\.(\/|\\|$))+/, '');
+    const filePath = path.resolve(this.uploadDir, safeKey);
+    if (!filePath.startsWith(this.uploadDir)) {
+      logger.warn(`Potential directory traversal blocked in deleteFile: ${key}`);
+      return;
+    }
     try {
       if (fs.existsSync(filePath)) {
         await fs.promises.unlink(filePath);

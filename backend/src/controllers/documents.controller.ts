@@ -7,11 +7,23 @@ import { ServiceCase } from '../models/ServiceCase';
 import { storageService } from '../services/storage.service';
 import logger from '../utils/logger';
 
-// Configure Multer memory storage
+// Configure Multer memory storage with file type security verification
 const storage = multer.memoryStorage();
+const ALLOWED_EXTENSIONS = new Set([
+  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.txt',
+  '.png', '.jpg', '.jpeg', '.webp', '.svg', '.zip'
+]);
+
 export const uploadMiddleware = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 } // Limit to 10MB
+  limits: { fileSize: 10 * 1024 * 1024 }, // Limit to 10MB
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!ALLOWED_EXTENSIONS.has(ext)) {
+      return cb(new Error(`File type "${ext}" is not permitted for upload.`));
+    }
+    cb(null, true);
+  }
 });
 
 // Upload Document for a ServiceCase Checklist Item
@@ -111,12 +123,13 @@ export async function downloadDocument(req: Request, res: Response, next: NextFu
     // 2. Resolve path on disk if provider is local
     if (doc.provider === 'local') {
       const uploadDir = path.resolve(__dirname, '../../uploads');
-      const filePath = path.join(uploadDir, doc.storageKey);
+      const safeKey = path.normalize(doc.storageKey).replace(/^(\.\.(\/|\\|$))+/, '');
+      const filePath = path.resolve(uploadDir, safeKey);
 
-      if (!fs.existsSync(filePath)) {
+      if (!filePath.startsWith(uploadDir) || !fs.existsSync(filePath)) {
         return res.status(404).json({
           success: false,
-          message: 'Physical file not found on disk.',
+          message: 'Physical file not found on disk or invalid path.',
           errorCode: 'FILE_NOT_FOUND'
         });
       }

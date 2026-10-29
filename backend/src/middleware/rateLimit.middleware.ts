@@ -69,4 +69,4 @@ setInterval(() => {
       ipCache.delete(ip);
     }
   }
-}, 5 * 60 * 1000); // Clean every 5 minutes
+}, 5 * 60 * 1000).unref(); // Clean every 5 minutes (unref allows clean process exit)
