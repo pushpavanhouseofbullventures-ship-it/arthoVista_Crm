@@ -114,11 +114,17 @@ app.use('/api', rateLimiter, apiRouter);
 
 // 8. Serve Frontend Static SPA in Production / Hostinger
 const candidateDistPaths = [
+  path.resolve(__dirname, '../public'),
+  path.resolve(__dirname, '../../public'),
+  path.resolve(__dirname, 'public'),
+  path.resolve(process.cwd(), 'public'),
+  path.resolve(process.cwd(), 'backend/public'),
   path.resolve(__dirname, '../../frontend/dist'),
   path.resolve(__dirname, '../../../frontend/dist'),
   path.resolve(process.cwd(), 'frontend/dist'),
   path.resolve(process.cwd(), '../frontend/dist'),
-  path.resolve(process.cwd(), 'dist')
+  path.resolve(process.cwd(), 'dist'),
+  path.resolve(__dirname, 'dist/public')
 ];
 
 const frontendDistPath = candidateDistPaths.find(p => fs.existsSync(path.join(p, 'index.html')));
@@ -138,6 +144,11 @@ if (frontendDistPath) {
       return next();
     }
     res.sendFile(path.join(frontendDistPath, 'index.html'));
+  });
+} else {
+  logger.warn('Frontend build not detected in candidate paths.');
+  app.get('/', (_req: Request, res: Response) => {
+    res.status(200).send('Artha CRM API is online. Frontend static assets are being prepared.');
   });
 }
 
