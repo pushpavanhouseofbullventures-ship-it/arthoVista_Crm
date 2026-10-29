@@ -485,13 +485,21 @@ export const DashboardLayout: React.FC = () => {
 
             {/* Quick Add Lead Button */}
             {isPrivileged && (
-              <Link
-                to="/crm/leads"
-                className="hidden sm:inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl btn-tri-45 font-bold text-xs shadow-sm hover:shadow transition active:scale-95"
+              <button
+                type="button"
+                onClick={() => {
+                  if (location.pathname.startsWith('/crm/leads')) {
+                    window.dispatchEvent(new CustomEvent('open-new-lead-modal'));
+                  } else {
+                    navigate('/crm/leads?action=new');
+                  }
+                }}
+                className="hidden sm:inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl btn-tri-45 font-bold text-xs shadow-sm hover:shadow transition active:scale-95 cursor-pointer"
+                title="Create New Lead"
               >
                 <PlusCircle className="h-3.5 w-3.5" />
                 <span>New Lead</span>
-              </Link>
+              </button>
             )}
             {isPrivileged && (
               <Link

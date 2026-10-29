@@ -288,6 +288,25 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
     setSelectedLeads([]);
   }, [location.pathname, defaultMode]);
 
+  // Listener for global Add Lead events (e.g. from top header button or query params)
+  useEffect(() => {
+    const handleOpenModal = () => {
+      resetNewLeadForm();
+      setShowAddModal(true);
+    };
+
+    window.addEventListener('open-new-lead-modal', handleOpenModal);
+
+    const params = new URLSearchParams(location.search);
+    if (params.get('action') === 'new' || params.get('new') === 'true') {
+      handleOpenModal();
+    }
+
+    return () => {
+      window.removeEventListener('open-new-lead-modal', handleOpenModal);
+    };
+  }, [location.search]);
+
   // Non-managers (Sale Executives) do not manage assignments; ensure unassigned filter reset
   useEffect(() => {
     if (!isManager && unassignedOnly) {
@@ -359,6 +378,10 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
       resetNewLeadForm();
     },
     onError: (err: any) => {
+      if (err.response?.data?.isDuplicate && err.response?.data?.existingLead) {
+        setDuplicateWarning(err.response.data.existingLead);
+        return;
+      }
       alert(err.response?.data?.message || 'Failed to create lead.');
     }
   });
@@ -1074,17 +1097,34 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
           </div>
         )}
 
-        {/* Page Size Selector */}
-        <div className="flex items-center space-x-1.5 flex-shrink-0">
-          <span className="text-[10px] text-slate-400 font-bold uppercase">ROWS:</span>
-          <select
-            value={limit}
-            onChange={(e) => { setLimit(Number(e.target.value)); setPage(1); }}
-            className="px-2 py-1 rounded-lg border border-slate-200 dark:border-dark-700 bg-slate-50 dark:bg-dark-800 text-xs font-bold outline-none"
-          >
-            <option value={25}>25 / page</option>
-            <option value={50}>50 / page</option>
-          </select>
+        {/* Page Size Selector & Add Lead Action */}
+        <div className="flex items-center space-x-2.5 flex-shrink-0">
+          <div className="flex items-center space-x-1.5">
+            <span className="text-[10px] text-slate-400 font-bold uppercase">ROWS:</span>
+            <select
+              value={limit}
+              onChange={(e) => { setLimit(Number(e.target.value)); setPage(1); }}
+              className="px-2 py-1 rounded-lg border border-slate-200 dark:border-dark-700 bg-slate-50 dark:bg-dark-800 text-xs font-bold outline-none cursor-pointer"
+            >
+              <option value={25}>25 / page</option>
+              <option value={50}>50 / page</option>
+            </select>
+          </div>
+
+          {isPrivileged && (
+            <button
+              type="button"
+              onClick={() => {
+                resetNewLeadForm();
+                setShowAddModal(true);
+              }}
+              className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl btn-tri-45 font-bold text-xs shadow-sm hover:shadow transition active:scale-95 cursor-pointer"
+              title="Add New Lead"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>Add Lead</span>
+            </button>
+          )}
         </div>
       </div>
 
