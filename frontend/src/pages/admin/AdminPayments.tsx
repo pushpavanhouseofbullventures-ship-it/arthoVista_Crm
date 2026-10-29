@@ -73,7 +73,7 @@ export const AdminPayments: React.FC = () => {
                     </td>
 
                     <td className="py-4 font-bold text-primary-600 dark:text-primary-400">
-                      {p.planId?.name || 'Subscription'}
+                      {p.planId?.name || 'Payment'}
                     </td>
 
                     <td className="py-4 font-mono text-[11px] text-slate-600 dark:text-dark-300">

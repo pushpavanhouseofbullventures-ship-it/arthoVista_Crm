@@ -7,7 +7,7 @@ export const AdminOrganizations: React.FC = () => {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
 
-  // Fetch all organizations with user counts & subscriptions
+  // Fetch all organizations with user counts
   const { data: organizations } = useQuery({
     queryKey: ['admin-organizations-page'],
     queryFn: async () => {
@@ -99,7 +99,7 @@ export const AdminOrganizations: React.FC = () => {
                     </td>
 
                     <td className="py-4 font-bold text-primary-600 dark:text-primary-400">
-                      {org.subscription?.planName || 'Starter'}
+                      Full Access
                     </td>
 
                     <td className="py-4 text-slate-500">

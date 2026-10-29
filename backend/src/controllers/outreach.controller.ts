@@ -575,7 +575,7 @@ export async function getCallBrief(req: Request, res: Response, next: NextFuncti
     const { id } = req.params;
     const { isCustomer } = req.query;
 
-    const brief = await AIOutreachService.generateCallBrief(id, isCustomer === 'true');
+    const brief = await AIOutreachService.generateCallBrief(id as string, isCustomer === 'true');
     return res.json({
       success: true,
       data: brief
@@ -963,7 +963,7 @@ export async function updateCommunicationConsent(req: Request, res: Response, ne
 export async function getNextActionRecommendation(req: Request, res: Response, next: NextFunction) {
   try {
     const { leadId } = req.params;
-    const rec = await AIOutreachService.getNextActionRecommendation(leadId);
+    const rec = await AIOutreachService.getNextActionRecommendation(leadId as string);
     return res.json({ success: true, data: rec });
   } catch (error) {
     next(error);

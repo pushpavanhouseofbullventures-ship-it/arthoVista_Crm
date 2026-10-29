@@ -192,7 +192,7 @@ export const AdminPlans: React.FC = () => {
           </div>
           <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">Dynamic Pricing Plans</h1>
           <p className="text-xs text-slate-500 dark:text-dark-400 mt-0.5">
-            Configure subscription tiers, flexible durations, user limits, resource quotas, and feature flags.
+            Configure workspace tiers, flexible durations, user limits, resource quotas, and feature flags.
           </p>
         </div>
 
@@ -331,7 +331,7 @@ export const AdminPlans: React.FC = () => {
           <div className="bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-800 rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-5 my-8 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-dark-800 pb-3">
               <h3 className="font-bold text-base text-slate-900 dark:text-white">
-                {editingPlan ? `Edit Plan: ${editingPlan.name}` : 'Create New Subscription Plan'}
+                {editingPlan ? `Edit Plan: ${editingPlan.name}` : 'Create New Plan'}
               </h3>
               <button onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white">
                 <X className="h-5 w-5" />

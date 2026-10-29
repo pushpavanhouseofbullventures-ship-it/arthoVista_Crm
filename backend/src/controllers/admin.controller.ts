@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { saasService } from '../services/saas.service';
 import { Plan } from '../models/Plan';
-import { Subscription } from '../models/Subscription';
 import { Organization } from '../models/Organization';
 import { Payment } from '../models/Payment';
 import { SaaSAuditLog } from '../models/SaaSAuditLog';
@@ -40,7 +39,7 @@ export async function createAdminPlan(req: Request, res: Response, next: NextFun
 
 export async function updateAdminPlan(req: Request, res: Response, next: NextFunction) {
   try {
-    const plan = await saasService.updatePlan(req.params.id, req.body, req.user);
+    const plan = await saasService.updatePlan(req.params.id as string, req.body, req.user);
     if (!plan) {
       return res.status(404).json({ success: false, message: 'Plan not found.' });
     }
@@ -56,7 +55,7 @@ export async function updateAdminPlan(req: Request, res: Response, next: NextFun
 
 export async function toggleAdminPlan(req: Request, res: Response, next: NextFunction) {
   try {
-    const plan = await saasService.togglePlanStatus(req.params.id, req.user);
+    const plan = await saasService.togglePlanStatus(req.params.id as string, req.user);
     if (!plan) {
       return res.status(404).json({ success: false, message: 'Plan not found.' });
     }
@@ -70,153 +69,17 @@ export async function toggleAdminPlan(req: Request, res: Response, next: NextFun
   }
 }
 
-export async function getAdminSubscriptions(req: Request, res: Response, next: NextFunction) {
-  try {
-    const { status, search } = req.query;
-    const query: any = {};
-    if (status && status !== 'all') {
-      query.status = status;
-    }
-
-    const subscriptions = await Subscription.find(query)
-      .populate('organizationId', 'name email phone isSuspended')
-      .populate('planId')
-      .sort({ updatedAt: -1 });
-
-    return res.json({ success: true, data: subscriptions });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function manualAssignAdminSubscription(req: Request, res: Response, next: NextFunction) {
-  try {
-    const sub = await saasService.manualAssignSubscription({
-      ...req.body,
-      adminUser: req.user
-    });
-    return res.json({
-      success: true,
-      message: 'Subscription successfully assigned to organization.',
-      data: sub
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function extendAdminSubscription(req: Request, res: Response, next: NextFunction) {
-  try {
-    const sub = await saasService.extendSubscription({
-      subscriptionId: req.params.id,
-      extendDays: req.body.extendDays ? Number(req.body.extendDays) : undefined,
-      customEndDate: req.body.customEndDate ? new Date(req.body.customEndDate) : undefined,
-      adminUser: req.user,
-      reason: req.body.reason
-    });
-    return res.json({
-      success: true,
-      message: `Subscription expiry extended to ${sub.endDate.toLocaleDateString()}.`,
-      data: sub
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function changeAdminSubscriptionPlan(req: Request, res: Response, next: NextFunction) {
-  try {
-    const sub = await saasService.changeSubscriptionPlan({
-      subscriptionId: req.params.id,
-      newPlanId: req.body.newPlanId,
-      effective: req.body.effective || 'immediate',
-      adminUser: req.user,
-      reason: req.body.reason
-    });
-    return res.json({
-      success: true,
-      message: 'Subscription plan change executed successfully.',
-      data: sub
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function suspendAdminSubscription(req: Request, res: Response, next: NextFunction) {
-  try {
-    const sub = await saasService.suspendSubscription(req.params.id, req.body.reason, req.user);
-    return res.json({
-      success: true,
-      message: 'Subscription and organization successfully suspended.',
-      data: sub
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function activateAdminSubscription(req: Request, res: Response, next: NextFunction) {
-  try {
-    const sub = await saasService.reactivateSubscription(req.params.id, req.user);
-    return res.json({
-      success: true,
-      message: 'Subscription and organization reactivated successfully.',
-      data: sub
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function cancelAdminSubscription(req: Request, res: Response, next: NextFunction) {
-  try {
-    const sub = await saasService.cancelSubscription(
-      req.params.id, 
-      req.body.cancelImmediately ?? true, 
-      req.user
-    );
-    return res.json({
-      success: true,
-      message: 'Subscription cancelled successfully.',
-      data: sub
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function createAdminCustomSubscription(req: Request, res: Response, next: NextFunction) {
-  try {
-    const sub = await saasService.createCustomSubscription({
-      ...req.body,
-      adminUser: req.user
-    });
-    return res.status(201).json({
-      success: true,
-      message: 'Custom customer subscription created and activated successfully.',
-      data: sub
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
 export async function getAdminOrganizations(req: Request, res: Response, next: NextFunction) {
   try {
     const orgs = await Organization.find().sort({ createdAt: -1 });
-    
-    // Attach member count and subscription for each org
+
+    // Attach member count for each org
     const orgsWithDetails = await Promise.all(
       orgs.map(async (org) => {
-        const [userCount, sub] = await Promise.all([
-          UserOrganizationRole.countDocuments({ organizationId: org._id }),
-          Subscription.findOne({ organizationId: org._id }).populate('planId')
-        ]);
+        const userCount = await UserOrganizationRole.countDocuments({ organizationId: org._id });
         return {
           ...org.toObject(),
-          userCount,
-          subscription: sub
+          userCount
         };
       })
     );
@@ -229,26 +92,12 @@ export async function getAdminOrganizations(req: Request, res: Response, next: N
 
 export async function toggleAdminOrganizationSuspension(req: Request, res: Response, next: NextFunction) {
   try {
-    const org = await Organization.findById(req.params.id);
+    const org = await Organization.findById(req.params.id as string);
     if (!org) return res.status(404).json({ success: false, message: 'Organization not found' });
 
     org.isSuspended = !org.isSuspended;
     org.suspendedAt = org.isSuspended ? new Date() : null;
     await org.save();
-
-    // Also update subscription status accordingly
-    if (org.isSuspended) {
-      await Subscription.findOneAndUpdate(
-        { organizationId: org._id },
-        { status: 'suspended', suspendedAt: new Date(), suspensionReason: req.body.reason || 'Admin suspended organization' }
-      );
-    } else {
-      await Subscription.findOneAndUpdate(
-        { organizationId: org._id },
-        { status: 'active', suspendedAt: null, suspensionReason: null }
-      );
-    }
-
     const user = req.user as any;
     await SaaSAuditLog.create({
       adminId: user?.id || user?._id,

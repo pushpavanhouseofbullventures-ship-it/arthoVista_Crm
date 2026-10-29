@@ -28,7 +28,6 @@ import { FollowUpSequence } from './models/FollowUpSequence';
 import { Campaign } from './models/Campaign';
 import { CommunicationConsent } from './models/CommunicationConsent';
 import { Plan } from './models/Plan';
-import { Subscription } from './models/Subscription';
 import { Payment } from './models/Payment';
 import { SaaSAuditLog } from './models/SaaSAuditLog';
 import { SequenceService } from './services/sequence.service';
@@ -1263,70 +1262,6 @@ async function seed() {
       );
 
       logger.info('Seeded dynamic Starter, Professional, Business, Enterprise, and Trial plans.');
-
-      // 20. Seed Organization Subscription (Linked to Professional Plan)
-      const subStartDate = new Date();
-      const subEndDate = new Date();
-      subEndDate.setDate(subEndDate.getDate() + 90); // 90 days active
-
-      const activeSub = await Subscription.findOneAndUpdate(
-        { organizationId: platformOrg._id },
-        {
-          planId: proPlan._id,
-          planName: proPlan.name,
-          status: 'active',
-          startDate: subStartDate,
-          endDate: subEndDate,
-          priceAtPurchase: proPlan.price,
-          currencyAtPurchase: proPlan.currency,
-          durationAtPurchase: proPlan.duration,
-          durationUnitAtPurchase: proPlan.durationUnit,
-          maxUsersAtPurchase: proPlan.maxUsers,
-          limitsAtPurchase: proPlan.limits,
-          featuresAtPurchase: proPlan.features,
-          autoRenew: true,
-          paymentStatus: 'paid',
-          paymentProvider: 'razorpay',
-          providerPaymentId: 'pay_rzp_live_seed_001',
-          providerOrderId: 'order_rzp_live_seed_001'
-        },
-        { upsert: true, new: true }
-      );
-
-      logger.info('Seeded Organization Subscription linked to Professional Plan.');
-
-      // 21. Seed Payment records
-      await Payment.findOneAndUpdate(
-        { organizationId: platformOrg._id, paymentId: 'pay_rzp_live_seed_001' },
-        {
-          organizationId: platformOrg._id,
-          subscriptionId: activeSub._id,
-          planId: proPlan._id,
-          provider: 'razorpay',
-          paymentId: 'pay_rzp_live_seed_001',
-          orderId: 'order_rzp_live_seed_001',
-          amount: 2499,
-          currency: 'INR',
-          status: 'captured',
-          paymentMethod: 'upi',
-          paidAt: subStartDate
-        },
-        { upsert: true }
-      );
-
-      // 22. Seed SaaS Audit Logs
-      await SaaSAuditLog.create({
-        adminId: superAdmin._id,
-        adminEmail: superAdmin.email,
-        adminName: `${superAdmin.firstName} ${superAdmin.lastName}`,
-        organizationId: platformOrg._id,
-        organizationName: platformOrg.name,
-        action: 'SUBSCRIPTION_ACTIVATED',
-        newValue: { planName: 'Professional', price: 2499, durationDays: 90 },
-        reason: 'Initial platform onboarding and subscription provisioning.'
-      });
-
-      logger.info('Seeded sample Payments and SaaS Audit Logs.');
 
     logger.info('Database seeding completed successfully.');
     process.exit(0);

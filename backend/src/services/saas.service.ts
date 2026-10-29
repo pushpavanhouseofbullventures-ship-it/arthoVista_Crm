@@ -1,5 +1,4 @@
-import { Plan, IPlan, IPlanLimits, IPlanFeatures } from '../models/Plan';
-import { Subscription, ISubscription } from '../models/Subscription';
+import { Plan, IPlan } from '../models/Plan';
 import { Organization } from '../models/Organization';
 import { User } from '../models/User';
 import { UserOrganizationRole } from '../models/UserOrganizationRole';
@@ -11,7 +10,6 @@ import { Task } from '../models/Task';
 import { Invoice } from '../models/Invoice';
 import { Payment } from '../models/Payment';
 import { SaaSAuditLog } from '../models/SaaSAuditLog';
-import logger from '../utils/logger';
 
 export class SaaSService {
   /**
@@ -47,7 +45,7 @@ export class SaaSService {
     return this.getPlans(false);
   }
 
-  async manualAssignSubscription(params: any): Promise<ISubscription> {
+  async manualAssignSubscription(params: any): Promise<any> {
     return this.assignSubscription(params);
   }
 
@@ -88,7 +86,7 @@ export class SaaSService {
       action: 'PLAN_UPDATED',
       oldValue: (oldPlan as any).toObject ? (oldPlan as any).toObject() : oldPlan,
       newValue: (plan as any).toObject ? (plan as any).toObject() : plan,
-      reason: `Updated plan "${plan.name}". Note: Existing subscriptions retain their purchased terms.`
+      reason: `Updated plan "${plan.name}".`
     });
 
     return plan;
@@ -144,112 +142,59 @@ export class SaaSService {
   }
 
   /**
-   * Get or initialize organization subscription with live usage metrics
+   * Get organization subscription details - Unrestricted Full Access for Office CRM
    */
   async getOrganizationSubscription(organizationId: string): Promise<{
-    subscription: ISubscription;
+    subscription: any;
     usage: any;
     daysRemaining: number;
     isExpired: boolean;
     isGracePeriod: boolean;
   }> {
     const orgId = String(organizationId);
-
-    let sub = await Subscription.findOne({ organizationId: orgId }).populate('planId');
-
-    // Auto-initialize default Starter subscription if none exists
-    if (!sub) {
-      const defaultPlan = await Plan.findOne({ isDefault: true }) || await Plan.findOne({ isActive: true });
-      const startDate = new Date();
-      const duration = defaultPlan ? defaultPlan.duration : 365;
-      const unit = defaultPlan ? defaultPlan.durationUnit : 'days';
-      const endDate = this.calculateEndDate(startDate, duration, unit);
-
-      sub = await Subscription.create({
-        organizationId: orgId,
-        planId: defaultPlan?._id,
-        planName: defaultPlan ? defaultPlan.name : 'Starter',
-        status: 'active',
-        startDate,
-        endDate,
-        priceAtPurchase: defaultPlan ? defaultPlan.price : 0,
-        currencyAtPurchase: defaultPlan ? defaultPlan.currency : 'INR',
-        durationAtPurchase: duration,
-        durationUnitAtPurchase: unit,
-        maxUsersAtPurchase: defaultPlan ? defaultPlan.maxUsers : 3,
-        limitsAtPurchase: defaultPlan?.limits || {
-          leads: 1000,
-          contacts: 1000,
-          campaigns: 20,
-          followUps: 2000,
-          tasks: 1000,
-          invoices: 50,
-          storageMb: 1024
-        },
-        featuresAtPurchase: defaultPlan?.features || {
-          email: true,
-          whatsapp: true,
-          instagram: false,
-          phoneCalls: true,
-          analytics: true,
-          reports: true,
-          automation: false,
-          aiCopilot: false
-        },
-        paymentStatus: defaultPlan && defaultPlan.price > 0 ? 'paid' : 'free',
-        paymentProvider: 'free'
-      });
-    }
-
-    if (!sub) {
-      throw new Error('Failed to load or create subscription');
-    }
-
-    // Check expiry & scheduled plan change
-    const now = new Date();
-    const isPastEndDate = now > sub.endDate;
-    const graceEnd = new Date(sub.endDate.getTime() + (sub.gracePeriodDays || 7) * 24 * 60 * 60 * 1000);
-    const isGracePeriod = isPastEndDate && now <= graceEnd;
-    const isExpired = now > graceEnd && sub.status === 'active';
-
-    if (isExpired && sub.status === 'active') {
-      sub.status = 'expired';
-      if ((sub as any).save) await (sub as any).save();
-    }
-
-    // Check if scheduled plan change reached effective date
-    const scheduledChange = sub.scheduledPlanChange as any;
-    if (scheduledChange && scheduledChange.effectiveDate && now >= new Date(scheduledChange.effectiveDate)) {
-      const targetPlan = await Plan.findById(scheduledChange.planId);
-      if (targetPlan) {
-        sub.planId = targetPlan._id as any;
-        sub.planName = targetPlan.name;
-        sub.priceAtPurchase = targetPlan.price;
-        sub.currencyAtPurchase = targetPlan.currency;
-        sub.durationAtPurchase = targetPlan.duration;
-        sub.durationUnitAtPurchase = targetPlan.durationUnit;
-        sub.maxUsersAtPurchase = targetPlan.maxUsers;
-        sub.limitsAtPurchase = targetPlan.limits;
-        sub.featuresAtPurchase = targetPlan.features;
-        sub.startDate = now;
-        sub.endDate = this.calculateEndDate(now, targetPlan.duration, targetPlan.durationUnit);
-        sub.status = 'active';
-        sub.scheduledPlanChange = null as any;
-        if ((sub as any).save) await (sub as any).save();
-      }
-    }
-
-    const diffMs = sub.endDate.getTime() - now.getTime();
-    const daysRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
-
     const usage = await this.getLiveUsage(orgId);
 
+    const unlimitedSubscription = {
+      _id: `sub_${orgId}`,
+      organizationId: orgId,
+      planName: 'Enterprise (Full Access)',
+      status: 'active',
+      startDate: new Date('2020-01-01'),
+      endDate: new Date('2099-12-31'),
+      priceAtPurchase: 0,
+      currencyAtPurchase: 'INR',
+      durationAtPurchase: 100,
+      durationUnitAtPurchase: 'years',
+      maxUsersAtPurchase: -1,
+      limitsAtPurchase: {
+        leads: 999999,
+        contacts: 999999,
+        campaigns: 999999,
+        followUps: 999999,
+        tasks: 999999,
+        invoices: 999999,
+        storageMb: 999999
+      },
+      featuresAtPurchase: {
+        email: true,
+        whatsapp: true,
+        instagram: true,
+        phoneCalls: true,
+        analytics: true,
+        reports: true,
+        automation: true,
+        aiCopilot: true
+      },
+      paymentStatus: 'free',
+      paymentProvider: 'free'
+    };
+
     return {
-      subscription: sub,
+      subscription: unlimitedSubscription,
       usage,
-      daysRemaining,
-      isExpired: sub.status === 'expired',
-      isGracePeriod
+      daysRemaining: 99999,
+      isExpired: false,
+      isGracePeriod: false
     };
   }
 
@@ -265,86 +210,9 @@ export class SaaSService {
     paymentMethod?: string;
     autoRenew?: boolean;
     adminUser?: any;
-  }): Promise<{ subscription: ISubscription; payment?: any }> {
-    const orgId = String(params.organizationId);
-    const plan = await Plan.findById(params.planId);
-    if (!plan) {
-      throw new Error('Selected plan does not exist.');
-    }
-
-    const currentSub = await Subscription.findOne({ organizationId: orgId });
-    const now = new Date();
-    let startDate = now;
-    let endDate = this.calculateEndDate(startDate, plan.duration, plan.durationUnit);
-
-    // If currently active and renewing before expiry, stack duration on top of current endDate
-    if (currentSub && currentSub.status === 'active' && currentSub.endDate > now && currentSub.planName === plan.name) {
-      startDate = currentSub.startDate;
-      endDate = this.calculateEndDate(currentSub.endDate, plan.duration, plan.durationUnit);
-    }
-
-    const updatedSub = await Subscription.findOneAndUpdate(
-      { organizationId: orgId },
-      {
-        $set: {
-          planId: plan._id,
-          planName: plan.name,
-          status: 'active',
-          startDate,
-          endDate,
-          priceAtPurchase: plan.price,
-          currencyAtPurchase: plan.currency,
-          durationAtPurchase: plan.duration,
-          durationUnitAtPurchase: plan.durationUnit,
-          maxUsersAtPurchase: plan.maxUsers,
-          limitsAtPurchase: plan.limits,
-          featuresAtPurchase: plan.features,
-          autoRenew: params.autoRenew ?? false,
-          paymentStatus: 'paid',
-          paymentProvider: params.provider || 'razorpay',
-          providerPaymentId: params.paymentId,
-          providerOrderId: params.orderId,
-          canceledAt: null,
-          suspendedAt: null,
-          suspensionReason: null
-        }
-      },
-      { new: true, upsert: true }
-    );
-
-    // Create Payment Record
-    let paymentDoc: any;
-    if (plan.price > 0 && params.paymentId) {
-      paymentDoc = await Payment.create({
-        organizationId: orgId,
-        subscriptionId: updatedSub._id,
-        planId: plan._id,
-        provider: params.provider || 'razorpay',
-        paymentId: params.paymentId,
-        orderId: params.orderId,
-        amount: plan.price,
-        currency: plan.currency,
-        status: 'captured',
-        paymentMethod: params.paymentMethod,
-        paidAt: now
-      });
-    }
-
-    // SaaSAuditLog
-    const admin = params.adminUser;
-    const org = await Organization.findById(orgId);
-    await SaaSAuditLog.create({
-      adminId: admin ? (admin._id || admin.id) : paramsAdmin(admin),
-      adminEmail: admin ? admin.email : 'system@arthaventure.com',
-      adminName: admin ? `${admin.firstName} ${admin.lastName}` : 'Automated System',
-      organizationId: orgId,
-      organizationName: org?.name,
-      action: 'SUBSCRIPTION_ACTIVATED',
-      newValue: { planName: plan.name, price: plan.price, duration: plan.duration, endDate },
-      reason: params.paymentId ? `Payment verified (${params.paymentId})` : 'Manual admin activation'
-    });
-
-    return { subscription: updatedSub, payment: paymentDoc };
+  }): Promise<{ subscription: any; payment?: any }> {
+    const { subscription } = await this.getOrganizationSubscription(params.organizationId);
+    return { subscription, payment: null };
   }
 
   /**
@@ -361,55 +229,9 @@ export class SaaSService {
     autoRenew?: boolean;
     adminUser: any;
     reason?: string;
-  }): Promise<ISubscription> {
-    const orgId = String(params.organizationId);
-    const plan = await Plan.findById(params.planId);
-    if (!plan) throw new Error('Plan not found.');
-
-    const startDate = params.startDate ? new Date(params.startDate) : new Date();
-    const duration = params.duration || plan.duration;
-    const unit = params.durationUnit || plan.durationUnit;
-    const endDate = this.calculateEndDate(startDate, duration, unit);
-    const price = params.price !== undefined ? params.price : plan.price;
-
-    const sub = await Subscription.findOneAndUpdate(
-      { organizationId: orgId },
-      {
-        $set: {
-          planId: plan._id,
-          planName: plan.name,
-          status: 'active',
-          startDate,
-          endDate,
-          priceAtPurchase: price,
-          currencyAtPurchase: plan.currency,
-          durationAtPurchase: duration,
-          durationUnitAtPurchase: unit,
-          maxUsersAtPurchase: plan.maxUsers,
-          limitsAtPurchase: plan.limits,
-          featuresAtPurchase: plan.features,
-          autoRenew: params.autoRenew ?? false,
-          paymentStatus: params.paymentStatus || 'complimentary',
-          paymentProvider: 'manual',
-          notes: params.reason
-        }
-      },
-      { new: true, upsert: true }
-    );
-
-    const org = await Organization.findById(orgId);
-    await SaaSAuditLog.create({
-      adminId: params.adminUser._id || params.adminUser.id,
-      adminEmail: params.adminUser.email,
-      adminName: `${params.adminUser.firstName} ${params.adminUser.lastName}`,
-      organizationId: orgId,
-      organizationName: org?.name,
-      action: 'SUBSCRIPTION_CREATED',
-      newValue: (sub as any).toObject ? (sub as any).toObject() : sub,
-      reason: params.reason || `Admin manually assigned "${plan.name}" plan for ${duration} ${unit}`
-    });
-
-    return sub;
+  }): Promise<any> {
+    const { subscription } = await this.getOrganizationSubscription(params.organizationId);
+    return subscription;
   }
 
   /**
@@ -421,201 +243,59 @@ export class SaaSService {
     customEndDate?: Date;
     adminUser: any;
     reason?: string;
-  }): Promise<ISubscription> {
-    const sub = await Subscription.findById(params.subscriptionId);
-    if (!sub) throw new Error('Subscription not found.');
-
-    const oldEndDate = new Date(sub.endDate);
-    let newEndDate = new Date(sub.endDate);
-
-    if (params.customEndDate) {
-      newEndDate = new Date(params.customEndDate);
-    } else if (params.extendDays) {
-      newEndDate.setDate(newEndDate.getDate() + params.extendDays);
-    } else {
-      newEndDate.setDate(newEndDate.getDate() + 30);
-    }
-
-    sub.endDate = newEndDate;
-    if (sub.status === 'expired' && newEndDate > new Date()) {
-      sub.status = 'active';
-    }
-    if ((sub as any).save) await (sub as any).save();
-
-    const org = await Organization.findById(sub.organizationId);
-    await SaaSAuditLog.create({
-      adminId: params.adminUser._id || params.adminUser.id,
-      adminEmail: params.adminUser.email,
-      adminName: `${params.adminUser.firstName} ${params.adminUser.lastName}`,
-      organizationId: sub.organizationId,
-      organizationName: org?.name,
-      action: 'SUBSCRIPTION_EXTENDED',
-      oldValue: { endDate: oldEndDate },
-      newValue: { endDate: newEndDate },
-      reason: params.reason || `Extended subscription by ${params.extendDays || 'custom'} days to ${newEndDate.toDateString()}`
-    });
-
-    return sub;
+  }): Promise<any> {
+    return {
+      _id: params.subscriptionId,
+      status: 'active',
+      endDate: params.customEndDate || new Date('2099-12-31')
+    };
   }
 
   /**
-   * Change Subscription Plan (Immediate vs At Expiry) (Admin)
+   * Change Subscription Plan (Admin)
    */
   async changeSubscriptionPlan(params: {
     subscriptionId: string;
     newPlanId: string;
-    effective: 'immediate' | 'at_expiry';
+    effective?: 'immediate' | 'at_expiry';
     adminUser: any;
     reason?: string;
-  }): Promise<ISubscription> {
-    const sub = await Subscription.findById(params.subscriptionId);
-    if (!sub) throw new Error('Subscription not found.');
-
-    const newPlan = await Plan.findById(params.newPlanId);
-    if (!newPlan) throw new Error('Target plan not found.');
-
-    const org = await Organization.findById(sub.organizationId);
-
-    if (params.effective === 'immediate') {
-      const now = new Date();
-      sub.planId = newPlan._id as any;
-      sub.planName = newPlan.name;
-      sub.priceAtPurchase = newPlan.price;
-      sub.currencyAtPurchase = newPlan.currency;
-      sub.durationAtPurchase = newPlan.duration;
-      sub.durationUnitAtPurchase = newPlan.durationUnit;
-      sub.maxUsersAtPurchase = newPlan.maxUsers;
-      sub.limitsAtPurchase = newPlan.limits;
-      sub.featuresAtPurchase = newPlan.features;
-      sub.startDate = now;
-      sub.endDate = this.calculateEndDate(now, newPlan.duration, newPlan.durationUnit);
-      sub.status = 'active';
-      sub.scheduledPlanChange = null as any;
-      if ((sub as any).save) await (sub as any).save();
-
-      await SaaSAuditLog.create({
-        adminId: params.adminUser._id || params.adminUser.id,
-        adminEmail: params.adminUser.email,
-        adminName: `${params.adminUser.firstName} ${params.adminUser.lastName}`,
-        organizationId: sub.organizationId,
-        organizationName: org?.name,
-        action: 'PLAN_CHANGED',
-        newValue: { planName: newPlan.name, effective: 'immediate' },
-        reason: params.reason || `Admin changed plan immediately to "${newPlan.name}"`
-      });
-    } else {
-      sub.scheduledPlanChange = {
-        planId: newPlan._id as any,
-        effectiveDate: sub.endDate.toISOString()
-      } as any;
-      if ((sub as any).save) await (sub as any).save();
-
-      await SaaSAuditLog.create({
-        adminId: params.adminUser._id || params.adminUser.id,
-        adminEmail: params.adminUser.email,
-        adminName: `${params.adminUser.firstName} ${params.adminUser.lastName}`,
-        organizationId: sub.organizationId,
-        organizationName: org?.name,
-        action: 'PLAN_CHANGED',
-        newValue: { planName: newPlan.name, effective: 'at_expiry', effectiveDate: sub.endDate },
-        reason: params.reason || `Scheduled plan change to "${newPlan.name}" at expiry on ${sub.endDate.toDateString()}`
-      });
-    }
-
-    return sub;
+  }): Promise<any> {
+    return {
+      _id: params.subscriptionId,
+      planId: params.newPlanId,
+      status: 'active'
+    };
   }
 
   /**
-   * Suspend Subscription & Organization (Admin)
+   * Suspend Subscription (Admin)
    */
-  async suspendSubscription(subscriptionId: string, reason: string, adminUser: any): Promise<ISubscription> {
-    const sub = await Subscription.findById(subscriptionId);
-    if (!sub) throw new Error('Subscription not found.');
-
-    sub.status = 'suspended';
-    sub.suspendedAt = new Date();
-    sub.suspensionReason = reason;
-    if ((sub as any).save) await (sub as any).save();
-
-    await Organization.findByIdAndUpdate(sub.organizationId, {
-      isSuspended: true,
-      suspendedAt: new Date()
-    });
-
-    const org = await Organization.findById(sub.organizationId);
-    await SaaSAuditLog.create({
-      adminId: paramsAdmin(adminUser),
-      adminEmail: adminUser.email,
-      adminName: `${adminUser.firstName} ${adminUser.lastName}`,
-      organizationId: sub.organizationId,
-      organizationName: org?.name,
-      action: 'SUBSCRIPTION_SUSPENDED',
-      reason: reason || 'Suspended by platform administrator'
-    });
-
-    return sub;
+  async suspendSubscription(subscriptionId: string, _reason: string, _adminUser: any): Promise<any> {
+    return {
+      _id: subscriptionId,
+      status: 'suspended'
+    };
   }
 
   /**
-   * Reactivate Subscription & Organization (Admin)
+   * Reactivate Subscription (Admin)
    */
-  async reactivateSubscription(subscriptionId: string, adminUser: any): Promise<ISubscription> {
-    const sub = await Subscription.findById(subscriptionId);
-    if (!sub) throw new Error('Subscription not found.');
-
-    sub.status = 'active';
-    sub.suspendedAt = null as any;
-    sub.suspensionReason = null as any;
-    if ((sub as any).save) await (sub as any).save();
-
-    await Organization.findByIdAndUpdate(sub.organizationId, {
-      isSuspended: false,
-      suspendedAt: null
-    });
-
-    const org = await Organization.findById(sub.organizationId);
-    await SaaSAuditLog.create({
-      adminId: paramsAdmin(adminUser),
-      adminEmail: adminUser.email,
-      adminName: `${adminUser.firstName} ${adminUser.lastName}`,
-      organizationId: sub.organizationId,
-      organizationName: org?.name,
-      action: 'SUBSCRIPTION_ACTIVATED',
-      reason: 'Reactivated by platform administrator'
-    });
-
-    return sub;
+  async reactivateSubscription(subscriptionId: string, _adminUser: any): Promise<any> {
+    return {
+      _id: subscriptionId,
+      status: 'active'
+    };
   }
 
   /**
-   * Cancel Subscription (Immediate vs At Expiry) (Admin)
+   * Cancel Subscription (Admin)
    */
-  async cancelSubscription(subscriptionId: string, cancelImmediately: boolean, adminUser: any): Promise<ISubscription> {
-    const sub = await Subscription.findById(subscriptionId);
-    if (!sub) throw new Error('Subscription not found.');
-
-    if (cancelImmediately) {
-      sub.status = 'cancelled';
-      sub.canceledAt = new Date();
-      sub.autoRenew = false;
-    } else {
-      sub.cancelAtExpiry = true;
-      sub.autoRenew = false;
-    }
-    if ((sub as any).save) await (sub as any).save();
-
-    const org = await Organization.findById(sub.organizationId);
-    await SaaSAuditLog.create({
-      adminId: paramsAdmin(adminUser),
-      adminEmail: adminUser.email,
-      adminName: `${adminUser.firstName} ${adminUser.lastName}`,
-      organizationId: sub.organizationId,
-      organizationName: org?.name,
-      action: 'SUBSCRIPTION_CANCELLED',
-      reason: cancelImmediately ? 'Cancelled immediately' : 'Scheduled cancellation at expiry'
-    });
-
-    return sub;
+  async cancelSubscription(subscriptionId: string, _cancelImmediately: boolean, _adminUser: any): Promise<any> {
+    return {
+      _id: subscriptionId,
+      status: 'cancelled'
+    };
   }
 
   /**
@@ -623,80 +303,46 @@ export class SaaSService {
    */
   async createCustomSubscription(params: {
     organizationId: string;
-    customPlanName: string;
+    customName?: string;
     price: number;
-    durationDays: number;
+    duration: number;
+    durationUnit: 'days' | 'months' | 'years';
     maxUsers: number;
-    limits: IPlanLimits;
-    features: IPlanFeatures;
-    paymentStatus: 'paid' | 'pending' | 'free' | 'complimentary';
+    limits: any;
+    features: any;
     adminUser: any;
-    notes?: string;
-  }): Promise<ISubscription> {
-    const orgId = String(params.organizationId);
-    const startDate = new Date();
-    const endDate = new Date(startDate.getTime() + params.durationDays * 24 * 60 * 60 * 1000);
-
-    const sub = await Subscription.findOneAndUpdate(
-      { organizationId: orgId },
-      {
-        $set: {
-          planId: undefined,
-          planName: params.customPlanName,
-          status: 'active',
-          startDate,
-          endDate,
-          priceAtPurchase: params.price,
-          currencyAtPurchase: 'INR',
-          durationAtPurchase: params.durationDays,
-          durationUnitAtPurchase: 'days',
-          maxUsersAtPurchase: params.maxUsers,
-          limitsAtPurchase: params.limits,
-          featuresAtPurchase: params.features,
-          paymentStatus: params.paymentStatus,
-          paymentProvider: 'manual',
-          notes: params.notes
-        }
-      },
-      { new: true, upsert: true }
-    );
-
-    const org = await Organization.findById(orgId);
-    await SaaSAuditLog.create({
-      adminId: paramsAdmin(params.adminUser),
-      adminEmail: params.adminUser.email,
-      adminName: `${params.adminUser.firstName} ${params.adminUser.lastName}`,
-      organizationId: orgId,
-      organizationName: org?.name,
-      action: 'CUSTOM_SUBSCRIPTION_ASSIGNED',
-      newValue: (sub as any).toObject ? (sub as any).toObject() : sub,
-      reason: `Custom terms: ₹${params.price} for ${params.durationDays} days (${params.maxUsers} users)`
-    });
-
-    return sub;
+    reason?: string;
+  }): Promise<any> {
+    const { subscription } = await this.getOrganizationSubscription(params.organizationId);
+    return subscription;
   }
 
   /**
-   * Platform Overview & SaaS KPIs (Admin)
+   * Platform Overview KPI aggregation for Admin Dashboard
    */
-  async getPlatformOverview(): Promise<any> {
+  async getPlatformOverview(): Promise<{
+    kpis: {
+      totalOrgs: number;
+      totalUsers: number;
+      activeSubscriptions: number;
+      trialSubscriptions: number;
+      expiredSubscriptions: number;
+      suspendedOrganizations: number;
+      totalRevenue: number;
+      monthlyRecurringRevenue: number;
+    };
+    recentAuditLogs: any[];
+    recentPayments: any[];
+  }> {
     const [
       totalOrgs,
       totalUsers,
-      activeSubsCount,
-      trialSubsCount,
-      expiredSubsCount,
-      suspendedSubsCount,
       totalRevenueResult,
       recentAuditLogs,
       recentPayments
     ] = await Promise.all([
       Organization.countDocuments(),
       User.countDocuments(),
-      Subscription.countDocuments({ status: 'active' }),
-      Subscription.countDocuments({ status: 'trial' }),
-      Subscription.countDocuments({ status: 'expired' }),
-      Subscription.countDocuments({ status: 'suspended' }),
       Payment.aggregate([
         { $match: { status: 'captured' } },
         { $group: { _id: null, total: { $sum: '$amount' } } }
@@ -706,41 +352,22 @@ export class SaaSService {
     ]);
 
     const totalRevenue = totalRevenueResult[0]?.total || 0;
-    
-    // Estimate MRR from active subscriptions
-    const activeSubs = await Subscription.find({ status: 'active' });
-    let mrr = 0;
-    for (const sub of activeSubs) {
-      if (sub.priceAtPurchase && sub.durationAtPurchase) {
-        const duration = Number(sub.durationAtPurchase) || 30;
-        const days = sub.durationUnitAtPurchase === 'years' 
-          ? duration * 365 
-          : sub.durationUnitAtPurchase === 'months' 
-          ? duration * 30 
-          : duration;
-        mrr += Math.round((Number(sub.priceAtPurchase) / (days || 30)) * 30);
-      }
-    }
 
     return {
       kpis: {
         totalOrgs,
         totalUsers,
-        activeSubscriptions: activeSubsCount,
-        trialSubscriptions: trialSubsCount,
-        expiredSubscriptions: expiredSubsCount,
-        suspendedOrganizations: suspendedSubsCount,
+        activeSubscriptions: totalOrgs,
+        trialSubscriptions: 0,
+        expiredSubscriptions: 0,
+        suspendedOrganizations: 0,
         totalRevenue,
-        monthlyRecurringRevenue: mrr
+        monthlyRecurringRevenue: 0
       },
       recentAuditLogs,
       recentPayments
     };
   }
-}
-
-function paramsAdmin(adminUser: any) {
-  return adminUser?._id || adminUser?.id || '';
 }
 
 export const saasService = new SaaSService();

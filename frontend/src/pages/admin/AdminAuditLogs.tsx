@@ -33,7 +33,7 @@ export const AdminAuditLogs: React.FC = () => {
         </div>
         <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">SaaS Platform Audit Trail</h1>
         <p className="text-xs text-slate-500 dark:text-dark-400 mt-0.5">
-          Immutable log of all plan adjustments, price changes, subscription extensions, suspensions, and manual overrides.
+          Immutable log of all plan adjustments, suspensions, and administrative system overrides.
         </p>
       </div>
 

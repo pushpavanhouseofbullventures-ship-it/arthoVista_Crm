@@ -3,7 +3,6 @@ import { Invoice, mongoose } from '../models';
 import { Customer } from '../models/Customer';
 import { Activity } from '../models/Activity';
 import { AuditLog } from '../models/AuditLog';
-import { Subscription } from '../models/Subscription';
 import { Quotation } from '../models/Quotation';
 import logger from '../utils/logger';
 
@@ -111,22 +110,6 @@ export async function createInvoice(req: Request, res: Response, next: NextFunct
     const orgId = req.organizationId;
     const userId = req.user?.id;
     const { customerId, date, dueDate, items, notes, status = 'draft' } = req.body;
-
-    // Subscription Limits Quota Verification Check
-    const sub = await Subscription.findOne({ organizationId: orgId }).session(session);
-    if (sub) {
-      if (sub.currentBillingCycleInvoices >= sub.invoicesCountLimit) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(403).json({
-          success: false,
-          message: `Your subscription monthly invoice limit (${sub.invoicesCountLimit}) has been exceeded. Please upgrade your plan.`,
-          errorCode: 'SUBSCRIPTION_LIMIT_EXCEEDED'
-        });
-      }
-      sub.currentBillingCycleInvoices += 1;
-      await sub.save({ session });
-    }
 
     // 1. Calculate values
     let subtotal = 0;

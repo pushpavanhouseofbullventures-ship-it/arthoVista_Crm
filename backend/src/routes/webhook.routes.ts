@@ -1,6 +1,5 @@
 import { Router, Request, Response } from 'express';
 import { razorpayService } from '../services/razorpay.service';
-import { saasService } from '../services/saas.service';
 import { WebhookLog } from '../models/WebhookLog';
 import { Lead } from '../models/Lead';
 import { Activity } from '../models/Activity';
@@ -35,21 +34,7 @@ router.post('/razorpay', async (req: Request, res: Response) => {
 
     if (eventType === 'payment.captured' || eventType === 'order.paid') {
       const paymentEntity = event.payload?.payment?.entity || {};
-      const notes = paymentEntity.notes || {};
-      const organizationId = notes.organizationId;
-      const planId = notes.planId;
-
-      if (organizationId && planId) {
-        await saasService.activateOrRenewSubscription({
-          organizationId,
-          planId,
-          paymentId: paymentEntity.id,
-          orderId: paymentEntity.order_id,
-          provider: 'razorpay',
-          paymentMethod: paymentEntity.method || 'online'
-        });
-        logger.info(`Subscription activated via webhook for org: ${organizationId}`);
-      }
+      logger.info(`Payment webhook captured: ${paymentEntity.id || eventId}`);
     }
 
     await WebhookLog.create({

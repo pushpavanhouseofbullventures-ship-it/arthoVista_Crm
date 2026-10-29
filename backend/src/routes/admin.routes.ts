@@ -7,14 +7,6 @@ import {
   createAdminPlan,
   updateAdminPlan,
   toggleAdminPlan,
-  getAdminSubscriptions,
-  manualAssignAdminSubscription,
-  extendAdminSubscription,
-  changeAdminSubscriptionPlan,
-  suspendAdminSubscription,
-  activateAdminSubscription,
-  cancelAdminSubscription,
-  createAdminCustomSubscription,
   getAdminOrganizations,
   toggleAdminOrganizationSuspension,
   getAdminPayments,
@@ -35,16 +27,6 @@ router.get('/plans', getAdminPlans);
 router.post('/plans', createAdminPlan);
 router.put('/plans/:id', updateAdminPlan);
 router.patch('/plans/:id/toggle', toggleAdminPlan);
-
-// Subscriptions Management
-router.get('/subscriptions', getAdminSubscriptions);
-router.post('/subscriptions/manual', manualAssignAdminSubscription);
-router.post('/subscriptions/custom', createAdminCustomSubscription);
-router.post('/subscriptions/:id/extend', extendAdminSubscription);
-router.post('/subscriptions/:id/change-plan', changeAdminSubscriptionPlan);
-router.post('/subscriptions/:id/suspend', suspendAdminSubscription);
-router.post('/subscriptions/:id/activate', activateAdminSubscription);
-router.post('/subscriptions/:id/cancel', cancelAdminSubscription);
 
 // Organizations Directory
 router.get('/organizations', getAdminOrganizations);

@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../services/api';
 import { 
   Building2, Users, CreditCard, ShieldAlert, 
-  ArrowUpRight, Clock, CheckCircle2, 
-  AlertTriangle, Sparkles, TrendingUp
+  ArrowUpRight, CheckCircle2, 
+  Sparkles, TrendingUp
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -39,7 +39,7 @@ export const AdminOverview: React.FC = () => {
           </div>
           <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">Platform Administration</h1>
           <p className="text-xs text-slate-500 dark:text-dark-400 mt-0.5">
-            Global multi-tenant governance, dynamic plan management, revenue metrics, and tenant subscriptions.
+            Global multi-tenant governance, system configurations, and workspace management.
           </p>
         </div>
 
@@ -49,13 +49,6 @@ export const AdminOverview: React.FC = () => {
             className="px-4 py-2 btn-tri-45 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center space-x-1.5 active:scale-95"
           >
             <span>Manage Plans</span>
-            <ArrowUpRight className="h-3.5 w-3.5" />
-          </Link>
-          <Link
-            to="/admin/subscriptions"
-            className="px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 font-bold text-xs rounded-xl shadow-sm transition flex items-center space-x-1.5"
-          >
-            <span>Subscriptions</span>
             <ArrowUpRight className="h-3.5 w-3.5" />
           </Link>
         </div>
@@ -76,7 +69,7 @@ export const AdminOverview: React.FC = () => {
               <TrendingUp className="h-5 w-5" />
             </div>
           </div>
-          <span className="text-xs text-emerald-600 font-semibold mt-2 inline-block">Active recurring subscriptions</span>
+          <span className="text-xs text-emerald-600 font-semibold mt-2 inline-block">Active revenue stream</span>
         </div>
 
         {/* Total Platform Revenue */}
@@ -92,7 +85,7 @@ export const AdminOverview: React.FC = () => {
               <CreditCard className="h-5 w-5" />
             </div>
           </div>
-          <span className="text-xs text-slate-500 mt-2 inline-block">Processed via Razorpay & Manual</span>
+          <span className="text-xs text-slate-500 mt-2 inline-block">Processed via Payments & Billing</span>
         </div>
 
         {/* Active Organizations */}
@@ -109,7 +102,7 @@ export const AdminOverview: React.FC = () => {
             </div>
           </div>
           <span className="text-xs text-blue-600 font-semibold mt-2 inline-block">
-            {kpis.activeSubscriptions} Active &bull; {kpis.trialSubscriptions} Trial
+            {kpis.totalOrgs} Workspaces configured
           </span>
         </div>
 
@@ -131,29 +124,13 @@ export const AdminOverview: React.FC = () => {
       </div>
 
       {/* Secondary Status Breakdown */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-2 gap-3">
         <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-900/40 flex items-center justify-between">
           <div>
-            <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase">Active Subs</span>
-            <h4 className="text-lg font-black text-emerald-900 dark:text-emerald-200">{kpis.activeSubscriptions}</h4>
+            <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase">Active Workspaces</span>
+            <h4 className="text-lg font-black text-emerald-900 dark:text-emerald-200">{kpis.totalOrgs}</h4>
           </div>
           <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-        </div>
-
-        <div className="p-4 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/60 dark:border-indigo-900/40 flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-bold text-indigo-800 dark:text-indigo-300 uppercase">Trial Subs</span>
-            <h4 className="text-lg font-black text-indigo-900 dark:text-indigo-200">{kpis.trialSubscriptions}</h4>
-          </div>
-          <Clock className="h-5 w-5 text-indigo-600" />
-        </div>
-
-        <div className="p-4 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40 flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300 uppercase">Expired Subs</span>
-            <h4 className="text-lg font-black text-amber-900 dark:text-amber-200">{kpis.expiredSubscriptions}</h4>
-          </div>
-          <AlertTriangle className="h-5 w-5 text-amber-600" />
         </div>
 
         <div className="p-4 rounded-2xl bg-rose-50/50 dark:bg-rose-950/20 border border-rose-200/60 dark:border-rose-900/40 flex items-center justify-between">
