@@ -52,10 +52,10 @@ export async function getAssignmentConfig(req: Request, res: Response, next: Nex
         .map(async (ur: any) => {
           const repId = ur.userId._id;
           const [totalAssigned, openLeads, convertedLeads, lostLeads] = await Promise.all([
-            Lead.countDocuments({ organizationId: orgId, assignedTo: repId, isDeleted: false }),
-            Lead.countDocuments({ organizationId: orgId, assignedTo: repId, status: { $in: ['New', 'Open'] }, isDeleted: false }),
-            Lead.countDocuments({ organizationId: orgId, assignedTo: repId, status: 'Converted', isDeleted: false }),
-            Lead.countDocuments({ organizationId: orgId, assignedTo: repId, status: 'Lost', isDeleted: false })
+            Lead.countDocuments({ organizationId: orgId, assignedTo: repId, isDeleted: false, leadType: { $ne: 'HR' } }),
+            Lead.countDocuments({ organizationId: orgId, assignedTo: repId, status: { $in: ['New', 'Open'] }, isDeleted: false, leadType: { $ne: 'HR' } }),
+            Lead.countDocuments({ organizationId: orgId, assignedTo: repId, status: 'Converted', isDeleted: false, leadType: { $ne: 'HR' } }),
+            Lead.countDocuments({ organizationId: orgId, assignedTo: repId, status: 'Lost', isDeleted: false, leadType: { $ne: 'HR' } })
           ]);
 
           const conversionRate = totalAssigned > 0 ? Math.round((convertedLeads / totalAssigned) * 100) : 0;
@@ -74,11 +74,12 @@ export async function getAssignmentConfig(req: Request, res: Response, next: Nex
         })
     );
 
-    // 3. Fetch unassigned count
+    // 3. Fetch unassigned count (strictly for CRM sales leads, excluding HR)
     const unassignedCount = await Lead.countDocuments({
       organizationId: orgId,
-      assignedTo: { $in: [null, undefined] },
-      isDeleted: false
+      assignedTo: { $in: [null, undefined, ''] },
+      isDeleted: false,
+      leadType: { $ne: 'HR' }
     });
 
     return res.json({
@@ -121,8 +122,9 @@ export async function autoAssignUnassignedLeads(req: Request, res: Response, nex
 
     const unassignedLeads = await Lead.find({
       organizationId: orgId,
-      assignedTo: { $in: [null, undefined] },
-      isDeleted: false
+      assignedTo: { $in: [null, undefined, ''] },
+      isDeleted: false,
+      leadType: { $ne: 'HR' }
     }).limit(Number(limit));
 
     if (unassignedLeads.length === 0) {

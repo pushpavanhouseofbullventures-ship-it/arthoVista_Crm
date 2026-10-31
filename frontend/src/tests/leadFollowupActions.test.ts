@@ -64,3 +64,4 @@ test('Frontend Badge - Returns correct count when active follow-ups exist', () =
   const count = computeFollowupBadgeCount(activeBadgeResponse);
   assert.equal(count, 2, 'Followup badge must display 2 when 2 active follow-ups exist');
 });
+

@@ -136,7 +136,7 @@ export async function getCrmDashboardMetrics(req: Request, res: Response, next: 
     const now = new Date();
 
     // Query filters (strictly scoped to assigned representative for standard employees)
-    const leadFilter: any = { organizationId: orgId, isDeleted: false };
+    const leadFilter: any = { organizationId: orgId, isDeleted: false, leadType: { $ne: 'HR' } };
     const followupFilter: any = { organizationId: orgId };
     const caseFilter: any = { organizationId: orgId };
 
@@ -197,21 +197,26 @@ export async function getCrmDashboardMetrics(req: Request, res: Response, next: 
 
     // 2. Fetch Follow-ups
     const followups = await FollowUp.find(followupFilter)
-      .populate('leadId', 'name phone leadId company')
+      .populate('leadId', 'name phone leadId company isDeleted')
       .populate('customerId', 'name phone customerId')
       .populate('assignedTo', 'firstName lastName email')
       .sort({ date: 1, time: 1 });
+
+    const activeFollowups = followups.filter((f: any) => {
+      if (f.leadId && typeof f.leadId === 'object' && f.leadId.isDeleted === true) return false;
+      return true;
+    });
 
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
 
-    const totalFollowups = followups.length;
-    const pendingFollowups = followups.filter(f => f.status === 'pending');
-    const completedFollowups = followups.filter(f => f.status === 'completed');
-    const overdueFollowups = followups.filter(f => f.status === 'pending' && new Date(f.date) < todayStart);
-    const todayFollowups = followups.filter(f => {
+    const totalFollowups = activeFollowups.length;
+    const pendingFollowups = activeFollowups.filter(f => f.status === 'pending');
+    const completedFollowups = activeFollowups.filter(f => f.status === 'completed');
+    const overdueFollowups = activeFollowups.filter(f => f.status === 'pending' && new Date(f.date) < todayStart);
+    const todayFollowups = activeFollowups.filter(f => {
       const d = new Date(f.date);
       return d >= todayStart && d <= todayEnd;
     });
@@ -291,10 +296,10 @@ export async function getCrmDashboardMetrics(req: Request, res: Response, next: 
           if (!u) return null;
 
           const [assignedCount, openCount, convertedCount, lostCount] = await Promise.all([
-            Lead.countDocuments({ organizationId: orgId, assignedTo: u._id, isDeleted: false }),
-            Lead.countDocuments({ organizationId: orgId, assignedTo: u._id, status: { $nin: ['Converted', 'Lost'] }, isDeleted: false }),
-            Lead.countDocuments({ organizationId: orgId, assignedTo: u._id, status: 'Converted', isDeleted: false }),
-            Lead.countDocuments({ organizationId: orgId, assignedTo: u._id, status: 'Lost', isDeleted: false })
+            Lead.countDocuments({ organizationId: orgId, assignedTo: u._id, isDeleted: false, leadType: { $ne: 'HR' } }),
+            Lead.countDocuments({ organizationId: orgId, assignedTo: u._id, status: { $nin: ['Converted', 'Lost'] }, isDeleted: false, leadType: { $ne: 'HR' } }),
+            Lead.countDocuments({ organizationId: orgId, assignedTo: u._id, status: 'Converted', isDeleted: false, leadType: { $ne: 'HR' } }),
+            Lead.countDocuments({ organizationId: orgId, assignedTo: u._id, status: 'Lost', isDeleted: false, leadType: { $ne: 'HR' } })
           ]);
 
           return {

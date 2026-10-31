@@ -206,7 +206,7 @@ export async function getLeads(req: Request, res: Response, next: NextFunction) 
 
     // Unassigned filter (Privileged Admins & Managers only)
     if (unassignedOnly === 'true' && isPrivileged) {
-      query.assignedTo = { $in: [null, undefined] };
+      query.assignedTo = { $in: [null, undefined, ''] };
     }
 
     // Priority and Source filters

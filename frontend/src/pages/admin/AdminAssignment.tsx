@@ -18,6 +18,7 @@ export const AdminAssignment: React.FC = () => {
   const isAdmin = ['Super Admin', 'Admin'].includes(currentRole) || ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '');
   const isSuperAdmin = isAdmin;
   const isManager = isAdmin || currentRole === 'Manager';
+  const isPrivileged = isManager;
 
   const [activeTab, setActiveTab] = useState<'employees' | 'unassigned' | 'rules' | 'audit'>('employees');
 
@@ -54,7 +55,7 @@ export const AdminAssignment: React.FC = () => {
   const { data: unassignedData, isLoading: isLoadingUnassigned } = useQuery({
     queryKey: ['unassigned-leads'],
     queryFn: async () => {
-      const res = await api.get('/leads', { params: { unassignedOnly: 'true', limit: 50 } });
+      const res = await api.get('/leads', { params: { unassignedOnly: 'true', limit: 100 } });
       return res.data.data;
     }
   });
@@ -297,7 +298,11 @@ export const AdminAssignment: React.FC = () => {
             }`}
         >
           <span>Unassigned Leads</span>
-          <span className="px-1.5 py-0.5 rounded-full bg-white/20 text-[10px] font-black">
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+            activeTab === 'unassigned'
+              ? 'bg-white/20 text-white'
+              : 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
+          }`}>
             {configData?.unassignedCount || 0}
           </span>
         </button>
@@ -521,7 +526,7 @@ export const AdminAssignment: React.FC = () => {
                       </td>
                       <td className="p-3 text-slate-400">{new Date(lead.createdAt).toLocaleDateString('en-IN')}</td>
                       <td className="p-3 text-right">
-                        {isSuperAdmin ? (
+                        {isPrivileged ? (
                           <div className="inline-flex items-center space-x-2">
                             <select
                               onChange={(e) => {
@@ -541,7 +546,7 @@ export const AdminAssignment: React.FC = () => {
                             </select>
                           </div>
                         ) : (
-                          <span className="text-[11px] text-slate-400 italic">Unassigned (Admin only)</span>
+                          <span className="text-[11px] text-slate-400 italic">Unassigned (Admin/Manager only)</span>
                         )}
                       </td>
                     </tr>

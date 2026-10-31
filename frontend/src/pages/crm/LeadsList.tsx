@@ -2184,16 +2184,6 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
                 <button
                   type="button"
                   onClick={() => {
-                    setDirectFollowUpDate(getInDaysDate(2));
-                    setDirectFollowUpTime('11:00 AM');
-                  }}
-                  className="px-2.5 py-1 rounded-xl text-[11px] font-bold bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300 border border-purple-200 dark:border-purple-800 transition cursor-pointer"
-                >
-                  ⚡ In 2 Days
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
                     setDirectFollowUpDate(getInDaysDate(7));
                     setDirectFollowUpTime('11:00 AM');
                   }}

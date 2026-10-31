@@ -9,7 +9,8 @@ import {
   Receipt, ArrowUpRight, Clock,
   Kanban, List, Sparkles, ChevronRight,
   Settings2, CheckSquare, Square, UserCheck,
-  CreditCard, X, Briefcase, Plus, ShieldCheck
+  CreditCard, X, Briefcase, Plus, ShieldCheck,
+  Trash2, SlidersHorizontal, AlertTriangle, Unlock, RefreshCw
 } from 'lucide-react';
 
 interface QuotationItem {
@@ -53,6 +54,7 @@ interface QuotationRecord {
   taxTotal: number;
   totalDiscount: number;
   status: string;
+  subject?: string;
   date: string;
   validUntil: string;
   items: QuotationItem[];
@@ -94,6 +96,7 @@ interface QuotationRecord {
     id?: string;
     invoiceId: string;
     status: string;
+  subject?: string;
     totalAmount: number;
     outstandingBalance: number;
     amountPaid?: number;
@@ -163,6 +166,23 @@ export const OTPipeline: React.FC = () => {
   const [editingFinanceStatus, setEditingFinanceStatus] = useState<FinanceStatus>('pending_approval');
   const [editingFinanceAssignee, setEditingFinanceAssignee] = useState('');
   const [editingFinanceNotes, setEditingFinanceNotes] = useState('');
+
+  // Admin & Manager Master Control & Delete states
+  const [deleteQuoteTarget, setDeleteQuoteTarget] = useState<QuotationRecord | null>(null);
+  const [masterModalQuote, setMasterModalQuote] = useState<QuotationRecord | null>(null);
+  const [masterSubject, setMasterSubject] = useState('');
+  const [masterTotalAmount, setMasterTotalAmount] = useState<number>(0);
+  const [masterNotes, setMasterNotes] = useState('');
+  const [masterFinanceStatus, setMasterFinanceStatus] = useState<FinanceStatus>('pending_approval');
+  const [masterFinanceApproved, setMasterFinanceApproved] = useState(false);
+  const [masterFinanceNotes, setMasterFinanceNotes] = useState('');
+  const [masterFinanceAssignee, setMasterFinanceAssignee] = useState('');
+  const [masterOpsStatus, setMasterOpsStatus] = useState<OpsStatus>('docs_pending');
+  const [masterOpsNotes, setMasterOpsNotes] = useState('');
+  const [masterOpsAssignee, setMasterOpsAssignee] = useState('');
+  const [masterMilestones, setMasterMilestones] = useState<MilestoneItem[]>(DEFAULT_MILESTONES);
+  const [newMasterMilestone, setNewMasterMilestone] = useState('');
+  const [isSavingMaster, setIsSavingMaster] = useState(false);
 
   // Access Protection
   if (!hasOTAccess) {
@@ -317,6 +337,111 @@ export const OTPipeline: React.FC = () => {
       alert(err.response?.data?.message || 'Failed to mark invoice as paid.');
     }
   });
+
+  // Delete OT Pipeline Order Mutation (Admin & Manager)
+  const deleteOrderMutation = useMutation({
+    mutationFn: async (quoteId: string) => {
+      const res = await api.delete(`/quotations/${quoteId}`);
+      return res.data;
+    },
+    onSuccess: (data) => {
+      alert(data.message || 'OT Pipeline order deleted successfully.');
+      queryClient.invalidateQueries({ queryKey: ['ot-pipeline-quotations'] });
+      queryClient.invalidateQueries({ queryKey: ['quotations'] });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      setDeleteQuoteTarget(null);
+    },
+    onError: (err: any) => {
+      alert(err.response?.data?.message || 'Failed to delete order from OT Pipeline.');
+    }
+  });
+
+  // Open Master Control Modal (Admin & Manager)
+  const handleOpenMasterControlModal = (quote: QuotationRecord) => {
+    const wf = parseWorkflow(quote);
+    setMasterModalQuote(quote);
+    setMasterSubject(quote.subject || quote.items?.[0]?.name || 'Service Order');
+    setMasterTotalAmount(Number(quote.totalAmount || 0));
+    setMasterNotes(quote.notes?.replace(/<!--\s*OT_WORKFLOW:.*?-->/s, '').trim() || '');
+    setMasterFinanceStatus(wf.financeStatus);
+    setMasterFinanceApproved(Boolean(wf.financeApproved));
+    setMasterFinanceNotes(wf.financeNotes || '');
+    setMasterFinanceAssignee(wf.financeAssignee || '');
+    setMasterOpsStatus(wf.opsStatus);
+    setMasterOpsNotes(wf.opsNotes || '');
+    setMasterOpsAssignee(wf.opsAssignee || (quote.assignedTo?.firstName ? `${quote.assignedTo.firstName} ${quote.assignedTo.lastName}` : ''));
+    setMasterMilestones(wf.milestones && wf.milestones.length > 0 ? wf.milestones : DEFAULT_MILESTONES);
+    setNewMasterMilestone('');
+  };
+
+  // Save Master Control
+  const handleSaveMasterControl = async () => {
+    if (!masterModalQuote) return;
+    setIsSavingMaster(true);
+    try {
+      // 1. Update OT Workflow
+      await api.patch(`/quotations/${masterModalQuote._id}/ot-workflow`, {
+        financeStatus: masterFinanceStatus,
+        financeApproved: masterFinanceApproved,
+        financeApprovedAt: masterFinanceApproved ? (parseWorkflow(masterModalQuote).financeApprovedAt || new Date().toISOString()) : undefined,
+        financeApprovedBy: masterFinanceApproved ? (user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.email || 'Admin') : undefined,
+        financeNotes: masterFinanceNotes,
+        financeAssignee: masterFinanceAssignee,
+        opsStatus: masterOpsStatus,
+        opsNotes: masterOpsNotes,
+        opsAssignee: masterOpsAssignee,
+        milestones: masterMilestones
+      });
+
+      // 2. Update Quotation Details (Subject, Amount, Notes)
+      await api.put(`/quotations/${masterModalQuote._id}`, {
+        subject: masterSubject,
+        totalAmount: Number(masterTotalAmount),
+        notes: masterNotes
+      });
+
+      alert('OT Pipeline order updated successfully!');
+      queryClient.invalidateQueries({ queryKey: ['ot-pipeline-quotations'] });
+      queryClient.invalidateQueries({ queryKey: ['quotations'] });
+      setMasterModalQuote(null);
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to update OT Pipeline order.');
+    } finally {
+      setIsSavingMaster(false);
+    }
+  };
+
+  // Toggle milestone in Master modal
+  const handleToggleMasterMilestone = (id: string) => {
+    setMasterMilestones(prev => prev.map(m => {
+      if (m.id === id) {
+        const nextCompleted = !m.completed;
+        return {
+          ...m,
+          completed: nextCompleted,
+          completedAt: nextCompleted ? new Date().toISOString() : undefined
+        };
+      }
+      return m;
+    }));
+  };
+
+  // Add milestone in Master modal
+  const handleAddMasterMilestone = () => {
+    if (!newMasterMilestone.trim()) return;
+    const newM: MilestoneItem = {
+      id: `m_${Date.now()}`,
+      title: newMasterMilestone.trim(),
+      completed: false
+    };
+    setMasterMilestones(prev => [...prev, newM]);
+    setNewMasterMilestone('');
+  };
+
+  // Remove milestone in Master modal
+  const handleRemoveMasterMilestone = (id: string) => {
+    setMasterMilestones(prev => prev.filter(m => m.id !== id));
+  };
 
   // Open Operations Modal
   const handleOpenOpsModal = (quote: QuotationRecord) => {
@@ -1213,6 +1338,42 @@ export const OTPipeline: React.FC = () => {
                               )}
                             </>
                           )}
+
+                          {/* Action 4: Direct Unlock (Admin/Manager Fast Override) */}
+                          {(isAdmin || isManager) && !isApproved && (
+                            <button
+                              onClick={() => approveAndHandoverMutation.mutate({ quoteId: quote._id })}
+                              disabled={approveAndHandoverMutation.isPending}
+                              className="px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 text-xs font-bold transition flex items-center space-x-1 cursor-pointer"
+                              title="Admin/Manager Direct Override: Unlock & Handover to Operations"
+                            >
+                              <Unlock className="h-3.5 w-3.5" />
+                              <span>Unlock Ops</span>
+                            </button>
+                          )}
+
+                          {/* Action 5: Master Manage & Edit (Admin/Manager) */}
+                          {(isAdmin || isManager) && (
+                            <button
+                              onClick={() => handleOpenMasterControlModal(quote)}
+                              className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-dark-800 dark:hover:bg-dark-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition flex items-center space-x-1 cursor-pointer"
+                              title="Admin & Manager Full Command: Edit Deal Details, Milestones & Stages"
+                            >
+                              <SlidersHorizontal className="h-3.5 w-3.5 text-blue-500" />
+                              <span>Manage</span>
+                            </button>
+                          )}
+
+                          {/* Action 6: Delete Order (Admin/Manager) */}
+                          {(isAdmin || isManager) && (
+                            <button
+                              onClick={() => setDeleteQuoteTarget(quote)}
+                              className="p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 transition cursor-pointer"
+                              title="Delete OT Pipeline Order (Admin/Manager)"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -2018,6 +2179,331 @@ export const OTPipeline: React.FC = () => {
               >
                 {updateWorkflowMutation.isPending ? 'Saving...' : 'Save Finance Track'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 8. MODAL: DELETE OT PIPELINE ORDER (Admin & Manager) */}
+      {/* ========================================================================= */}
+      {deleteQuoteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-800 rounded-3xl shadow-2xl p-6 space-y-4">
+            <div className="flex items-center space-x-3 text-rose-600">
+              <div className="p-3 rounded-2xl bg-rose-100 dark:bg-rose-950/50">
+                <AlertTriangle className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Delete OT Pipeline Order</h3>
+                <p className="text-xs text-slate-400">Admin & Manager Authorization</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              Are you sure you want to permanently delete order <strong className="font-bold text-slate-900 dark:text-white">#{deleteQuoteTarget.quotationId || deleteQuoteTarget._id}</strong> for <strong className="font-bold text-slate-900 dark:text-white">{deleteQuoteTarget.leadId?.name || deleteQuoteTarget.customerId?.name || 'Valued Client'}</strong>? This will remove the deal and quotation from the OT Pipeline.
+            </p>
+
+            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100 dark:border-dark-800">
+              <button
+                type="button"
+                onClick={() => setDeleteQuoteTarget(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-800 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => deleteOrderMutation.mutate(deleteQuoteTarget._id)}
+                disabled={deleteOrderMutation.isPending}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition flex items-center space-x-1.5 shadow-md shadow-rose-500/20 cursor-pointer disabled:opacity-50"
+              >
+                {deleteOrderMutation.isPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                <span>Delete Order</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 9. MODAL: ADMIN & MANAGER MASTER CONTROL (Full Edit, Unlock & Track Override) */}
+      {/* ========================================================================= */}
+      {masterModalQuote && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="relative w-full max-w-2xl bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="p-5 border-b border-slate-100 dark:border-dark-800 flex items-center justify-between bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-dark-800 dark:to-dark-850">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
+                  <SlidersHorizontal className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 dark:text-white text-base">
+                    Master OT Order Management
+                  </h3>
+                  <p className="text-xs text-slate-500 font-mono">
+                    Order #{masterModalQuote.quotationId} • {masterModalQuote.leadId?.name || masterModalQuote.customerId?.name || 'Client'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setMasterModalQuote(null)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-dark-800 transition cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 overflow-y-auto space-y-6 text-xs">
+              {/* SECTION 1: Deal & Client Details */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-dark-800/60 border border-slate-200/80 dark:border-dark-700 space-y-3">
+                <h4 className="font-black text-slate-800 dark:text-white text-xs uppercase tracking-wider flex items-center space-x-1.5">
+                  <Briefcase className="h-4 w-4 text-blue-500" />
+                  <span>Deal Details & Commercials</span>
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 dark:text-slate-300 text-[11px]">Service / Subject</label>
+                    <input
+                      type="text"
+                      value={masterSubject}
+                      onChange={(e) => setMasterSubject(e.target.value)}
+                      className="w-full p-2.5 rounded-xl bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-700 text-xs text-slate-800 dark:text-white outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 dark:text-slate-300 text-[11px]">Total Deal Amount (₹)</label>
+                    <input
+                      type="number"
+                      value={masterTotalAmount}
+                      onChange={(e) => setMasterTotalAmount(Number(e.target.value))}
+                      className="w-full p-2.5 rounded-xl bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-700 text-xs text-slate-800 dark:text-white outline-none focus:ring-1 focus:ring-blue-500 font-mono font-bold"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-300 text-[11px]">Order Notes</label>
+                  <input
+                    type="text"
+                    value={masterNotes}
+                    onChange={(e) => setMasterNotes(e.target.value)}
+                    placeholder="Key project scope or special client requirements..."
+                    className="w-full p-2.5 rounded-xl bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-700 text-xs text-slate-800 dark:text-white outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* SECTION 2: Direct Override & Operations Handover */}
+              <div className="p-4 rounded-2xl bg-blue-50/70 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/40 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-black text-blue-900 dark:text-blue-300 text-xs uppercase tracking-wider flex items-center space-x-1.5">
+                      <Unlock className="h-4 w-4 text-blue-600" />
+                      <span>Operations Handover Status</span>
+                    </h4>
+                    <p className="text-[11px] text-blue-700/80 dark:text-blue-400 mt-0.5">
+                      Toggle to immediately unlock Operations execution without waiting for billing approval.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={masterFinanceApproved}
+                      onChange={(e) => setMasterFinanceApproved(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-dark-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  </label>
+                </div>
+                {masterFinanceApproved ? (
+                  <span className="inline-flex items-center space-x-1 text-[11px] font-bold text-emerald-600">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span>Unlocked for Operations Execution</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center space-x-1 text-[11px] font-bold text-amber-600">
+                    <Clock className="h-3.5 w-3.5" />
+                    <span>Locked awaiting Finance Handover Approval</span>
+                  </span>
+                )}
+              </div>
+
+              {/* SECTION 3: Finance Track */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-dark-800/60 border border-slate-200/80 dark:border-dark-700 space-y-3">
+                <h4 className="font-black text-slate-800 dark:text-white text-xs uppercase tracking-wider flex items-center space-x-1.5">
+                  <CreditCard className="h-4 w-4 text-emerald-500" />
+                  <span>Finance & Billing Track</span>
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 dark:text-slate-300 text-[11px]">Finance Status</label>
+                    <select
+                      value={masterFinanceStatus}
+                      onChange={(e) => setMasterFinanceStatus(e.target.value as FinanceStatus)}
+                      className="w-full p-2.5 rounded-xl bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-700 text-xs text-slate-800 dark:text-white outline-none focus:ring-1 focus:ring-emerald-500 font-semibold"
+                    >
+                      <option value="pending_approval">⏳ Pending Approval</option>
+                      <option value="invoiced">🧾 Invoiced</option>
+                      <option value="paid">✅ Paid & Settled</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 dark:text-slate-300 text-[11px]">Finance Assignee</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Pooja Sharma (Finance)"
+                      value={masterFinanceAssignee}
+                      onChange={(e) => setMasterFinanceAssignee(e.target.value)}
+                      className="w-full p-2.5 rounded-xl bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-700 text-xs text-slate-800 dark:text-white outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-300 text-[11px]">Finance / Transaction Notes</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Advance received, TDS, or payment terms..."
+                    value={masterFinanceNotes}
+                    onChange={(e) => setMasterFinanceNotes(e.target.value)}
+                    className="w-full p-2.5 rounded-xl bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-700 text-xs text-slate-800 dark:text-white outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              {/* SECTION 4: Operations Track & Milestones */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-dark-800/60 border border-slate-200/80 dark:border-dark-700 space-y-3">
+                <h4 className="font-black text-slate-800 dark:text-white text-xs uppercase tracking-wider flex items-center space-x-1.5">
+                  <Settings2 className="h-4 w-4 text-orange-500" />
+                  <span>Operations Execution Track</span>
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 dark:text-slate-300 text-[11px]">Operations Status</label>
+                    <select
+                      value={masterOpsStatus}
+                      onChange={(e) => setMasterOpsStatus(e.target.value as OpsStatus)}
+                      className="w-full p-2.5 rounded-xl bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-700 text-xs text-slate-800 dark:text-white outline-none focus:ring-1 focus:ring-orange-500 font-semibold"
+                    >
+                      <option value="docs_pending">📄 1. Docs Pending</option>
+                      <option value="in_progress">⚙️ 2. In Execution</option>
+                      <option value="completed">✅ 3. Completed</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 dark:text-slate-300 text-[11px]">Operations Assignee</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Vikram Malhotra (Operations)"
+                      value={masterOpsAssignee}
+                      onChange={(e) => setMasterOpsAssignee(e.target.value)}
+                      className="w-full p-2.5 rounded-xl bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-700 text-xs text-slate-800 dark:text-white outline-none focus:ring-1 focus:ring-orange-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Milestones Checklist */}
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-slate-700 dark:text-white uppercase tracking-wider text-[11px]">
+                      Milestones Checklist ({masterMilestones.filter(m => m.completed).length}/{masterMilestones.length})
+                    </label>
+                  </div>
+                  <div className="space-y-1.5">
+                    {masterMilestones.map((m) => (
+                      <div
+                        key={m.id}
+                        className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-dark-900 border border-slate-200/60 dark:border-dark-800"
+                      >
+                        <div
+                          onClick={() => handleToggleMasterMilestone(m.id)}
+                          className="flex items-center space-x-2.5 cursor-pointer flex-1"
+                        >
+                          {m.completed ? (
+                            <CheckSquare className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+                          ) : (
+                            <Square className="h-4 w-4 text-slate-300 dark:text-dark-500 flex-shrink-0" />
+                          )}
+                          <span className={`font-semibold ${m.completed ? 'line-through text-slate-400' : 'text-slate-800 dark:text-white'}`}>
+                            {m.title}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveMasterMilestone(m.id)}
+                          className="p-1 text-slate-400 hover:text-rose-600 transition ml-2"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    <div className="flex items-center space-x-2 pt-1">
+                      <input
+                        type="text"
+                        placeholder="Add new milestone task..."
+                        value={newMasterMilestone}
+                        onChange={(e) => setNewMasterMilestone(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddMasterMilestone(); } }}
+                        className="flex-1 p-2 rounded-xl bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-700 text-xs text-slate-800 dark:text-white outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddMasterMilestone}
+                        className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition cursor-pointer"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-300 text-[11px]">Operations Execution Notes</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Milestone updates, delivery notes, or government filing IDs..."
+                    value={masterOpsNotes}
+                    onChange={(e) => setMasterOpsNotes(e.target.value)}
+                    className="w-full p-2.5 rounded-xl bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-700 text-xs text-slate-800 dark:text-white outline-none focus:ring-1 focus:ring-orange-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-100 dark:border-dark-800 bg-slate-50/50 dark:bg-dark-800/50 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  const target = masterModalQuote;
+                  setMasterModalQuote(null);
+                  setDeleteQuoteTarget(target);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs transition flex items-center space-x-1.5 cursor-pointer"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Delete Order</span>
+              </button>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setMasterModalQuote(null)}
+                  className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-dark-800 cursor-pointer text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveMasterControl}
+                  disabled={isSavingMaster}
+                  className="px-5 py-2 rounded-xl btn-blue-45 text-white font-black text-xs shadow-md cursor-pointer disabled:opacity-50 flex items-center space-x-1.5"
+                >
+                  {isSavingMaster ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                  <span>{isSavingMaster ? 'Saving...' : 'Save All Changes'}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

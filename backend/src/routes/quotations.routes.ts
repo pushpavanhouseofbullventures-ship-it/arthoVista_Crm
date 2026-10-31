@@ -26,6 +26,6 @@ router.put('/:id', authorize(['accounting:write', 'leads:write']), updateQuotati
 router.patch('/:id/status', authorize(['accounting:write', 'leads:write']), updateQuotationStatus);
 router.patch('/:id/ot-workflow', authorizeAny(['accounting:write', 'leads:write']), updateOtWorkflow);
 router.post('/:id/convert-to-invoice', authorize(['accounting:write']), convertQuotationToInvoice);
-router.delete('/:id', authorize(['accounting:delete']), deleteQuotation);
+router.delete('/:id', authorizeAny(['accounting:delete', 'leads:delete', 'ot:write']), deleteQuotation);
 
 export default router;
