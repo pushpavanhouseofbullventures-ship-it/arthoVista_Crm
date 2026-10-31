@@ -121,3 +121,4 @@ test('Unassigned Leads Filter - Excludes deleted leads and HR candidate leads', 
   assert.equal(isUnassignedLead(deletedLead), false, 'Deleted lead must not appear in unassigned queue');
   assert.equal(isUnassignedLead(hrCandidate), false, 'HR applicant must not appear in CRM unassigned queue');
 });
+

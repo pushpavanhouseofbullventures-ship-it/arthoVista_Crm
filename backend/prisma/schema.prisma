@@ -207,6 +207,9 @@ model Lead {
   convertedInvoiceId   String?
   convertedBy          String?
   externalLeadId       String?
+  callHistory          Json?                  @default("[]")
+  followUpHistory      Json?                  @default("[]")
+  activityHistory      Json?                  @default("[]")
   isDeleted            Boolean                @default(false)
   version              Int                    @default(1)
   createdAt            DateTime               @default(now())
@@ -655,7 +658,7 @@ model Activity {
   updatedAt      DateTime      @updatedAt
 
   organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  lead           Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  lead           Lead?         @relation(fields: [leadId], references: [id], onDelete: Cascade)
   customer       Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
   deal           Deal?         @relation(fields: [dealId], references: [id], onDelete: SetNull)
   serviceCase    ServiceCase?  @relation(fields: [caseId], references: [id], onDelete: SetNull)
@@ -694,7 +697,7 @@ model FollowUp {
   updatedAt          DateTime          @updatedAt
 
   organization       Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  lead               Lead?             @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  lead               Lead?             @relation(fields: [leadId], references: [id], onDelete: Cascade)
   customer           Customer?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
   contact            Contact?          @relation(fields: [contactId], references: [id], onDelete: SetNull)
   assignee           User              @relation("FollowUpAssignedUser", fields: [assignedTo], references: [id], onDelete: Restrict)
@@ -821,7 +824,7 @@ model CallLog {
   updatedAt      DateTime      @updatedAt
 
   organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  lead           Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  lead           Lead?         @relation(fields: [leadId], references: [id], onDelete: Cascade)
   customer       Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
   contact        Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
   deal           Deal?         @relation(fields: [dealId], references: [id], onDelete: SetNull)

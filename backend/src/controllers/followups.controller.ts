@@ -90,9 +90,24 @@ export async function createFollowUp(req: Request, res: Response, next: NextFunc
       status: 'pending'
     });
 
-    // Update Lead.nextFollowUp if linked
+    // Update Lead.nextFollowUp & single-row followUpHistory if linked
     if (leadId) {
-      await Lead.findByIdAndUpdate(leadId, { $set: { nextFollowUp: new Date(date) } });
+      const targetLead = await Lead.findById(leadId);
+      if (targetLead) {
+        const fuEntry = {
+          followUpId: followup._id || (followup as any)?.id || `${Date.now()}`,
+          date: new Date(date),
+          time,
+          type,
+          notes,
+          status: 'pending',
+          assignedTo: targetAssignedTo
+        };
+        const currentFuHistory = Array.isArray((targetLead as any).followUpHistory) ? (targetLead as any).followUpHistory : [];
+        (targetLead as any).followUpHistory = [...currentFuHistory, fuEntry];
+        targetLead.nextFollowUp = new Date(date);
+        await targetLead.save();
+      }
       
       // Log in Lead Activity timeline
       await Activity.create({

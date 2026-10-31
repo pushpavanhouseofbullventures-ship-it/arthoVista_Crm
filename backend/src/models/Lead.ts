@@ -41,6 +41,9 @@ export const Lead = createPrismaModel<ILead>(
       // Ensure default values
       if (data.isDeleted === undefined) data.isDeleted = false;
       if (data.version === undefined) data.version = 1;
+      if (data.callHistory === undefined) data.callHistory = [];
+      if (data.followUpHistory === undefined) data.followUpHistory = [];
+      if (data.activityHistory === undefined) data.activityHistory = [];
 
       return data;
     },

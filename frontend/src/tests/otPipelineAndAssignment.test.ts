@@ -51,3 +51,4 @@ test('Unassigned Queue Params - Generates unassignedOnly query flag', () => {
   assert.equal(params.unassignedOnly, 'true');
   assert.equal(params.limit, 100);
 });
+

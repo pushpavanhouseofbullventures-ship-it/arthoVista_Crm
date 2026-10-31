@@ -1279,16 +1279,31 @@ export async function bulkUpdateLeads(req: Request, res: Response, next: NextFun
       update.$addToSet = { tags: tag };
     } else if (action === 'delete') {
       update.isDeleted = true;
-      // Cascade delete all associated follow-ups for deleted leads
+      update.callHistory = [];
+      update.followUpHistory = [];
+      update.activityHistory = [];
+      // Cascade delete all associated calls, follow-ups, and activities for deleted leads
       try {
+        await prisma.callLog.deleteMany({
+          where: {
+            organizationId: orgId,
+            leadId: { in: leadIds }
+          }
+        });
         await prisma.followUp.deleteMany({
           where: {
             organizationId: orgId,
             leadId: { in: leadIds }
           }
         });
+        await prisma.activity.deleteMany({
+          where: {
+            organizationId: orgId,
+            leadId: { in: leadIds }
+          }
+        });
       } catch (err) {
-        logger.error('Failed to cascade delete bulk followups:', err);
+        logger.error('Failed to cascade delete bulk callLogs/followups/activities:', err);
       }
     }
 
@@ -1556,7 +1571,14 @@ export async function deleteLead(req: Request, res: Response, next: NextFunction
 
     const lead = await Lead.findOneAndUpdate(
       { _id: id, organizationId: orgId },
-      { $set: { isDeleted: true } },
+      {
+        $set: {
+          isDeleted: true,
+          callHistory: [],
+          followUpHistory: [],
+          activityHistory: []
+        }
+      },
       { new: true }
     );
 
@@ -1564,16 +1586,28 @@ export async function deleteLead(req: Request, res: Response, next: NextFunction
       return res.status(404).json({ success: false, message: 'Lead not found.' });
     }
 
-    // Cascade delete any follow-up tasks associated with this lead
+    // Cascade delete any call logs, follow-up tasks, and activities associated with this lead
     try {
+      await prisma.callLog.deleteMany({
+        where: {
+          organizationId: orgId,
+          leadId: id as string
+        }
+      });
       await prisma.followUp.deleteMany({
         where: {
           organizationId: orgId,
           leadId: id as string
         }
       });
+      await prisma.activity.deleteMany({
+        where: {
+          organizationId: orgId,
+          leadId: id as string
+        }
+      });
     } catch (err) {
-      logger.error('Failed to cascade delete followups for lead:', err);
+      logger.error('Failed to cascade delete callLogs/followups/activities for lead:', err);
     }
 
     await AuditLog.create({

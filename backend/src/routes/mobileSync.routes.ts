@@ -167,8 +167,28 @@ router.post('/calls', async (req: Request, res: Response, next: NextFunction) =>
         logger.warn('[MobileSync] Failed to mirror call to CallLog:', callLogErr);
       }
 
-      // If matched with Lead, update Lead timeline and timestamps
+      // If matched with Lead, update Lead single-row call history, timeline and timestamps
       if (matchedLead) {
+        const callEntry = {
+          callId: followUp._id || (followUp as any)?.id || `${Date.now()}`,
+          phoneNumber,
+          contactName: matchedLead.name,
+          callType,
+          direction: callType === 'INCOMING' ? 'inbound' : 'outbound',
+          duration,
+          outcome,
+          date: callDate,
+          notes: notes || `Call duration: ${duration}s via SIM ${simSlot}. (${deviceName})`,
+          employeeId: userId,
+          employeeName,
+          simSlot,
+          deviceName,
+          source: 'android_sim_sync'
+        };
+
+        const existingCallHistory = Array.isArray((matchedLead as any).callHistory) ? (matchedLead as any).callHistory : [];
+        (matchedLead as any).callHistory = [...existingCallHistory, callEntry];
+
         await Activity.create({
           organizationId: orgId,
           leadId: matchedLead._id,
@@ -261,10 +281,66 @@ router.get('/logs', async (req: Request, res: Response, next: NextFunction) => {
 
     const targetEmployeeId = employeeId === 'mine' ? userId : (employeeId && employeeId !== 'all' ? employeeId : undefined);
 
-    let assignedLeadIds: string[] = [];
-    let assignedCustomerIds: string[] = [];
+    // 1. Fetch active (non-deleted) leads to enforce single-row history & prevent deleted lead data leak
+    const leadFilter: any = { organizationId: orgId, isDeleted: false };
+    if (!isPrivileged && userId) {
+      leadFilter.assignedTo = userId;
+    } else if (targetEmployeeId) {
+      leadFilter.assignedTo = targetEmployeeId;
+    }
 
-    // 1. Fetch from CallLog model (telephony, manual calls, mobile sync)
+    const activeLeads = await Lead.find(leadFilter)
+      .select('_id id leadId name company phone status assignedTo callHistory')
+      .populate('assignedTo', 'firstName lastName email');
+
+    const activeLeadIds = activeLeads.map((l: any) => (l._id || l.id).toString()).filter(Boolean);
+    const activeLeadIdSet = new Set(activeLeadIds);
+
+    // Single-Row Storage Extraction: extract call records directly from active leads
+    const singleRowCallLogs: any[] = [];
+    for (const l of activeLeads) {
+      const history = Array.isArray((l as any).callHistory) ? (l as any).callHistory : [];
+      const emp = l.assignedTo as any;
+      for (const item of history) {
+        singleRowCallLogs.push({
+          _id: item.callId || item._id || `${(l._id || l.id)}_${new Date(item.date).getTime()}`,
+          id: item.callId || item._id || `${(l._id || l.id)}_${new Date(item.date).getTime()}`,
+          source: 'single_row_lead',
+          provider: item.source || 'android_sim_sync',
+          leadId: {
+            _id: l._id || l.id,
+            id: l.id || l._id,
+            name: l.name,
+            leadId: l.leadId,
+            company: l.company,
+            phone: l.phone,
+            status: l.status
+          },
+          customerId: null,
+          assignedTo: emp ? {
+            _id: emp._id || emp.id,
+            id: emp.id || emp._id,
+            firstName: emp.firstName,
+            lastName: emp.lastName,
+            email: emp.email
+          } : null,
+          date: item.date,
+          outcome: item.outcome || 'Connected',
+          notes: item.notes,
+          channelDetails: {
+            callType: item.callType || 'OUTGOING',
+            callDuration: item.duration || 0,
+            simSlot: item.simSlot || 1,
+            phoneNumber: item.phoneNumber || l.phone,
+            contactName: item.contactName || l.name,
+            deviceName: item.deviceName || 'Android SIM',
+            source: item.source || 'android_sim_sync'
+          }
+        });
+      }
+    }
+
+    // 2. Fetch from CallLog and FollowUp tables (strictly constrained to active leads or active customers)
     const callLogQuery: any = { organizationId: orgId };
     const followUpQuery: any = {
       organizationId: orgId,
@@ -272,32 +348,36 @@ router.get('/logs', async (req: Request, res: Response, next: NextFunction) => {
     };
 
     if (!isPrivileged && userId) {
-      // Non-privileged employee: STRICTLY show ONLY call history for leads assigned to this employee
-      const assignedLeads = await Lead.find({
-        organizationId: orgId,
-        assignedTo: userId,
-        isDeleted: false
-      }).select('_id id');
-
-      assignedLeadIds = assignedLeads.map((l: any) => (l._id || l.id).toString()).filter(Boolean);
-
-      callLogQuery.leadId = { $in: assignedLeadIds };
-      followUpQuery.leadId = { $in: assignedLeadIds };
+      callLogQuery.leadId = { $in: activeLeadIds };
+      followUpQuery.leadId = { $in: activeLeadIds };
     } else if (targetEmployeeId) {
-      const empLeads = await Lead.find({
-        organizationId: orgId,
-        assignedTo: targetEmployeeId,
-        isDeleted: false
-      }).select('_id id');
-      assignedLeadIds = empLeads.map((l: any) => (l._id || l.id).toString()).filter(Boolean);
-
+      callLogQuery.$and = [
+        { organizationId: orgId },
+        {
+          $or: [
+            { employeeId: targetEmployeeId, leadId: { $in: activeLeadIds } },
+            { leadId: { $in: activeLeadIds } }
+          ]
+        }
+      ];
+      followUpQuery.$and = [
+        { organizationId: orgId, channel: 'phone' },
+        {
+          $or: [
+            { assignedTo: targetEmployeeId, leadId: { $in: activeLeadIds } },
+            { leadId: { $in: activeLeadIds } }
+          ]
+        }
+      ];
+    } else {
+      // Privileged: only show calls associated with active leads or valid customers
       callLogQuery.$or = [
-        { employeeId: targetEmployeeId },
-        { leadId: { $in: assignedLeadIds } }
+        { leadId: { $in: activeLeadIds } },
+        { customerId: { $exists: true, $ne: null } }
       ];
       followUpQuery.$or = [
-        { assignedTo: targetEmployeeId },
-        { leadId: { $in: assignedLeadIds } }
+        { leadId: { $in: activeLeadIds } },
+        { customerId: { $exists: true, $ne: null } }
       ];
     }
 
@@ -436,26 +516,35 @@ router.get('/logs', async (req: Request, res: Response, next: NextFunction) => {
       });
     }
 
-    // 5. Merge and sort newest first
-    const unifiedLogs = [...mappedCallLogs, ...mappedFollowUps].sort((a, b) => {
-      return new Date(b.date).getTime() - new Date(a.date).getTime();
-    });
+    // 5. Merge single-row lead call history, relational call logs, and follow-ups with deduplication
+    const seenUnifiedKeys = new Set<string>();
+    const unifiedLogs: any[] = [];
+
+    for (const log of [...singleRowCallLogs, ...mappedCallLogs, ...mappedFollowUps]) {
+      const phone = (log.channelDetails?.phoneNumber || log.phoneNumber || '').replace(/\D/g, '').slice(-10);
+      const timeMin = Math.floor(new Date(log.date).getTime() / 60000);
+      const key = `${phone}_${timeMin}`;
+      if (phone && seenUnifiedKeys.has(key)) {
+        continue;
+      }
+      if (phone) seenUnifiedKeys.add(key);
+      unifiedLogs.push(log);
+    }
+
+    unifiedLogs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     let finalLogs = unifiedLogs;
     if (!isPrivileged && userId) {
-      const allowedLeadIdSet = new Set(assignedLeadIds);
-
       finalLogs = unifiedLogs.filter((log: any) => {
         const lId = (log.leadId?._id || log.leadId?.id || (typeof log.leadId === 'string' ? log.leadId : '') || '').toString();
-        // User requirement: Only show call history matching leads assigned to this employee
-        return Boolean(lId && allowedLeadIdSet.has(lId));
+        // Only show call history matching active leads assigned to this employee
+        return Boolean(lId && activeLeadIdSet.has(lId));
       });
     } else if (targetEmployeeId) {
-      const allowedLeadIdSet = new Set(assignedLeadIds);
       finalLogs = unifiedLogs.filter((log: any) => {
         const callerId = (log.assignedTo?._id || log.assignedTo?.id || '').toString();
         const lId = (log.leadId?._id || log.leadId?.id || (typeof log.leadId === 'string' ? log.leadId : '') || '').toString();
-        return callerId === targetEmployeeId.toString() || Boolean(lId && allowedLeadIdSet.has(lId));
+        return callerId === targetEmployeeId.toString() || Boolean(lId && activeLeadIdSet.has(lId));
       });
     }
 
