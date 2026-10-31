@@ -127,7 +127,7 @@ export const DashboardLayout: React.FC = () => {
     if (!requiredRole || requiredRole === 'all') return true;
     if (requiredRole === 'ot') return hasOTAccess;
     if (requiredRole === 'hr') return hasHRAccess;
-    if (requiredRole === 'admin') return isAdmin;
+    if (requiredRole === 'admin') return isManager; // Manager has full command parity with Admin
     if (requiredRole === 'manager') return isManager;
     if (requiredRole === 'teamlead') return isTeamLeader;
     return false;

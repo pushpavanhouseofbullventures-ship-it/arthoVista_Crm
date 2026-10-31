@@ -45,11 +45,11 @@ export function authorize(requiredPermissions: string[]) {
       req.userRole = cached.name;
       const permissionNames = cached.permissions;
 
-      // Admins and Super Admins with platform:admin permission or master email can bypass all standard checks
+      // Admins, Super Admins, and Managers bypass standard permission checks (Full command parity)
       const ADMIN_EMAILS = ['shivamthakur12012@gmail.com', 'shivam.arthaventures@gmail.com'];
       if (
         permissionNames.includes('platform:admin') || 
-        ['Admin', 'Super Admin'].includes(cached.name) ||
+        ['Admin', 'Super Admin', 'Manager'].includes(cached.name) ||
         ADMIN_EMAILS.includes((req.user?.email || '').toLowerCase().trim())
       ) {
         return next();

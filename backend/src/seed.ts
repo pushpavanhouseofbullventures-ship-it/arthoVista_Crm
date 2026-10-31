@@ -132,16 +132,17 @@ async function seed() {
       },
       {
         name: 'Manager',
-        description: 'Level 2: Manage sales departments, unassigned lead queues, team leaders, billing, and reports',
+        description: 'Level 2: Manage sales departments, unassigned lead queues, team leaders, billing, settings, and reports',
         isSystem: true,
         permissions: getIds([
+          'platform:admin',
           'leads:read', 'leads:write', 'leads:delete',
           'customers:read', 'customers:write', 'customers:delete',
           'contacts:read', 'contacts:write', 'contacts:delete',
           'deals:read', 'deals:write', 'deals:delete',
           'service_cases:read', 'service_cases:write',
           'accounting:read', 'accounting:write', 'accounting:delete',
-          'settings:read',
+          'settings:read', 'settings:write',
           'support:read', 'support:write', 'support:delete'
         ])
       },

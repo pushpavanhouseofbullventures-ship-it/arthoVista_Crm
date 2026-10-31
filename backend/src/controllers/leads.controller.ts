@@ -234,7 +234,14 @@ export async function getLeads(req: Request, res: Response, next: NextFunction) 
     const pageSize = Math.min(Math.max(Number(limit) || 25, 1), 100);
     const skipIndex = (Number(page) - 1) * pageSize;
 
-    const baseCountFilter: any = { organizationId: orgId, isDeleted: false };
+    const baseCountFilter: any = { 
+      organizationId: orgId, 
+      isDeleted: false,
+      OR: [
+        { leadType: null },
+        { leadType: { not: 'HR' } }
+      ]
+    };
     if (!isPrivileged) {
       baseCountFilter.assignedTo = req.user?.id;
     }
@@ -248,6 +255,7 @@ export async function getLeads(req: Request, res: Response, next: NextFunction) 
     const todayCountFilter: any = {
       organizationId: orgId,
       isDeleted: false,
+      leadType: { $ne: 'HR' },
       ...(!isPrivileged ? { assignedTo: req.user?.id } : {}),
       $or: [
         { status: { $in: ['New', 'new', 'NEW'] } },
@@ -278,24 +286,34 @@ export async function getLeads(req: Request, res: Response, next: NextFunction) 
         _count: { _all: true }
       }),
       isPrivileged 
-        ? prisma.lead.count({ where: { organizationId: orgId, isDeleted: false, assignedTo: null } })
+        ? prisma.lead.count({ 
+            where: { 
+              organizationId: orgId, 
+              isDeleted: false, 
+              assignedTo: null,
+              OR: [{ leadType: null }, { leadType: { not: 'HR' } }]
+            } 
+          })
         : Promise.resolve(0),
       Lead.countDocuments(todayCountFilter),
       Lead.find({
         organizationId: orgId,
         isDeleted: false,
+        leadType: { $ne: 'HR' },
         status: { $in: ['Open', 'open', 'OPEN', 'Contacted', 'contacted', 'Qualified', 'qualified', 'Proposal Sent', 'proposal sent', 'Negotiation', 'negotiation', 'In Process', 'in process', 'Follow-up', 'followup'] },
         ...(!isPrivileged ? { assignedTo: req.user?.id } : {})
       }),
       Lead.find({
         organizationId: orgId,
         isDeleted: false,
+        leadType: { $ne: 'HR' },
         status: { $in: ['Lost', 'lost', 'LOST'] },
         ...(!isPrivileged ? { assignedTo: req.user?.id } : {})
       }),
       Lead.find({
         organizationId: orgId,
         isDeleted: false,
+        leadType: { $ne: 'HR' },
         status: { $in: ['Converted', 'converted', 'CONVERTED'] },
         ...(!isPrivileged ? { assignedTo: req.user?.id } : {})
       })

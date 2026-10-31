@@ -32,7 +32,10 @@ export function checkFeature(_feature: 'email' | 'whatsapp' | 'instagram' | 'pho
 export function platformAdminOnly(req: Request, res: Response, next: NextFunction) {
   const user = req.user as any;
   const adminEmails = ['shivamthakur12012@gmail.com', 'shivam.arthaventures@gmail.com'];
-  if (adminEmails.includes((user?.email || '').toLowerCase().trim()) || (req as any).userRole === 'Admin' || (req as any).userRole === 'Super Admin') {
+  if (
+    adminEmails.includes((user?.email || '').toLowerCase().trim()) || 
+    ['Admin', 'Super Admin', 'Manager'].includes((req as any).userRole)
+  ) {
     return next();
   }
 

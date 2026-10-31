@@ -13,4 +13,3 @@ if (fs.existsSync(backendDist)) {
   console.error('Compiled server not found. Ensure "npm run build" has executed.');
   process.exit(1);
 }
-

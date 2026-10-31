@@ -410,9 +410,29 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
       const res = await api.post('/leads/bulk', { ...payload, leadIds: selectedLeads });
       return res.data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      alert(data.message || 'Bulk operation completed.');
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       setSelectedLeads([]);
+    },
+    onError: (err: any) => {
+      alert(err.response?.data?.message || 'Bulk operation failed.');
+    }
+  });
+
+  // Single Lead Delete Mutation (Admin & Manager)
+  const deleteSingleLeadMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await api.delete(`/leads/${id}`);
+      return res.data;
+    },
+    onSuccess: (data) => {
+      alert(data.message || 'Lead deleted successfully.');
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      setSelectedLeads([]);
+    },
+    onError: (err: any) => {
+      alert(err.response?.data?.message || 'Failed to delete lead.');
     }
   });
 
@@ -1402,6 +1422,20 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
                         >
                           <Eye className="h-3.5 w-3.5" />
                         </Link>
+                        {isManager && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm(`Are you sure you want to delete lead "${lead.name}" (${lead.leadId || ''})?`)) {
+                                deleteSingleLeadMutation.mutate(lead._id);
+                              }
+                            }}
+                            title="Delete Lead"
+                            className="p-1.5 rounded-lg bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition hover:scale-105 active:scale-95 shadow-xs cursor-pointer"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

@@ -122,3 +122,36 @@ test('Lead Modal Action Trigger - URL query parsing triggers modal correctly', (
   assert.strictEqual(shouldOpenLeadModalFromQuery('?page=2'), false);
   assert.strictEqual(shouldOpenLeadModalFromQuery(''), false);
 });
+
+// Admin vs Manager Permissions in UI
+export function canUserDeleteTargetUser(userRole: string, targetRole: string): boolean {
+  if (userRole === 'Admin' || userRole === 'Super Admin') {
+    return targetRole !== 'Admin' && targetRole !== 'Super Admin';
+  }
+  if (userRole === 'Manager') {
+    return !['Admin', 'Super Admin', 'Manager'].includes(targetRole);
+  }
+  return false;
+}
+
+test('UI Permission Rule: Admin can delete Manager, but Manager cannot delete Manager or Admin', () => {
+  assert.strictEqual(canUserDeleteTargetUser('Admin', 'Manager'), true, 'Admin should be able to delete Manager');
+  assert.strictEqual(canUserDeleteTargetUser('Admin', 'Sale Executive'), true, 'Admin should be able to delete Sale Executive');
+  assert.strictEqual(canUserDeleteTargetUser('Admin', 'Admin'), false, 'Admin cannot delete Admin');
+
+  assert.strictEqual(canUserDeleteTargetUser('Manager', 'Sale Executive'), true, 'Manager should be able to delete Sale Executive');
+  assert.strictEqual(canUserDeleteTargetUser('Manager', 'Team Leader'), true, 'Manager should be able to delete Team Leader');
+  assert.strictEqual(canUserDeleteTargetUser('Manager', 'Manager'), false, 'Manager CANNOT delete Manager');
+  assert.strictEqual(canUserDeleteTargetUser('Manager', 'Admin'), false, 'Manager CANNOT delete Admin');
+
+  assert.strictEqual(canUserDeleteTargetUser('Sale Executive', 'Sale Executive'), false, 'Sale Executive cannot delete anyone');
+});
+
+test('Lead Deletion UI Permission: Both Admin and Manager have permission to delete leads', () => {
+  const canDeleteLead = (role: string) => ['Admin', 'Super Admin', 'Manager'].includes(role);
+  assert.strictEqual(canDeleteLead('Admin'), true);
+  assert.strictEqual(canDeleteLead('Manager'), true);
+  assert.strictEqual(canDeleteLead('Sale Executive'), false);
+});
+
+

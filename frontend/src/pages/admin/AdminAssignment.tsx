@@ -17,6 +17,7 @@ export const AdminAssignment: React.FC = () => {
   // 4-Tier Hierarchy: 1. Admin, 2. Manager, 3. Team Leader, 4. Sale Executive
   const isAdmin = ['Super Admin', 'Admin'].includes(currentRole) || ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(user?.email || '');
   const isSuperAdmin = isAdmin;
+  const isManager = isAdmin || currentRole === 'Manager';
 
   const [activeTab, setActiveTab] = useState<'employees' | 'unassigned' | 'rules' | 'audit'>('employees');
 
@@ -237,15 +238,15 @@ export const AdminAssignment: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-dark-400 mt-1">
-              {isSuperAdmin
+              {(isSuperAdmin || isManager)
                 ? 'Register employees, manage roles, configure auto-assignment distribution, and triage unassigned leads.'
-                : 'Monitor team workload, active allocations, distribution rules, and historical audit logs (Manager View).'}
+                : 'Monitor team workload, active allocations, distribution rules, and historical audit logs (Staff View).'}
             </p>
           </div>
         </div>
 
         <div className="flex items-center space-x-3 z-10">
-          {isSuperAdmin ? (
+          {(isSuperAdmin || isManager) ? (
             <>
               <button
                 onClick={() => setShowRegisterModal(true)}
@@ -335,12 +336,12 @@ export const AdminAssignment: React.FC = () => {
                   <span>Registered Team Members & Sales Agents</span>
                 </h2>
                 <p className="text-xs text-slate-400">
-                  {isSuperAdmin
+                  {(isSuperAdmin || isManager)
                     ? 'Manage employee accounts, role assignments, status, and active system access.'
                     : 'View team directory, active roles, and sales workload metrics.'}
                 </p>
               </div>
-              {isSuperAdmin && (
+              {(isSuperAdmin || isManager) && (
                 <button
                   onClick={() => setShowRegisterModal(true)}
                   className="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl btn-tri-45 font-bold text-xs transition shadow-sm active:scale-95 cursor-pointer"
@@ -405,17 +406,28 @@ export const AdminAssignment: React.FC = () => {
                         <td className="p-3 text-center font-bold text-emerald-600 dark:text-emerald-400">{emp.workload?.convertedLeads || 0}</td>
                         <td className="p-3 text-center font-semibold">{emp.workload?.conversionRate || 0}%</td>
                         <td className="p-3 text-right">
-                          {isSuperAdmin ? (
+                          {(isSuperAdmin || isManager) ? (
                             (() => {
-                              const isAdmin =
+                              const targetIsAdmin =
                                 emp.role === 'Admin' ||
                                 emp.role === 'Super Admin' ||
                                 ['shivam.arthaventures@gmail.com', 'shivamthakur12012@gmail.com'].includes(emp.email);
 
-                              if (isAdmin) {
+                              const targetIsManager = emp.role === 'Manager';
+
+                              if (targetIsAdmin) {
                                 return (
                                   <span className="text-[10px] font-semibold text-slate-400 dark:text-dark-500 italic pr-2">
                                     Protected (Admin)
+                                  </span>
+                                );
+                              }
+
+                              // Only difference: Admin can delete Manager, but Manager cannot delete Manager
+                              if (targetIsManager && !isSuperAdmin) {
+                                return (
+                                  <span className="text-[10px] font-semibold text-slate-400 dark:text-dark-500 italic pr-2">
+                                    Protected (Manager)
                                   </span>
                                 );
                               }
@@ -600,10 +612,10 @@ export const AdminAssignment: React.FC = () => {
                     </p>
                     <p className="text-[11px] text-slate-400 mt-0.5">{rule.description}</p>
                   </div>
-                  <label className={`relative inline-flex items-center ${isSuperAdmin ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
+                  <label className={`relative inline-flex items-center ${(isSuperAdmin || isManager) ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
                     <input
                       type="checkbox"
-                      disabled={!isSuperAdmin}
+                      disabled={!(isSuperAdmin || isManager)}
                       defaultChecked={rule.enabled}
                       className="sr-only peer"
                     />
@@ -661,8 +673,8 @@ export const AdminAssignment: React.FC = () => {
         </div>
       )}
 
-      {/* REGISTER EMPLOYEE MODAL (Admin only) */}
-      {showRegisterModal && isSuperAdmin && (
+      {/* REGISTER EMPLOYEE MODAL (Admin & Manager) */}
+      {showRegisterModal && (isSuperAdmin || isManager) && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
           <div className="bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-dark-800 pb-3">
@@ -781,8 +793,8 @@ export const AdminAssignment: React.FC = () => {
         </div>
       )}
 
-      {/* DELETE EMPLOYEE CONFIRMATION MODAL (Admin only) */}
-      {deleteTarget && isSuperAdmin && (
+      {/* DELETE EMPLOYEE CONFIRMATION MODAL (Admin & Manager) */}
+      {deleteTarget && (isSuperAdmin || isManager) && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
           <div className="bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-dark-800 pb-3">

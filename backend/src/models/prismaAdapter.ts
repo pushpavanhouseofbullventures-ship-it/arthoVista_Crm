@@ -189,7 +189,21 @@ export function transformFilter(filter: any, modelName?: string): any {
               fieldClause.equals = normalizeId(opVal);
               break;
             case '$ne':
-              fieldClause.not = normalizeId(opVal);
+              if (opVal === null) {
+                fieldClause.not = null;
+              } else {
+                // In PostgreSQL, NULL != 'value' is unknown and filtered out.
+                // To match MongoDB semantics for { field: { $ne: val } }, include both NULL and not-equal:
+                const neClause = {
+                  OR: [
+                    { [key]: null },
+                    { [key]: { not: normalizeId(opVal) } }
+                  ]
+                };
+                where.AND = where.AND || [];
+                where.AND.push(neClause);
+                continue;
+              }
               break;
             case '$in': {
               const inArr = Array.isArray(opVal) ? opVal.map(normalizeId) : [normalizeId(opVal)];

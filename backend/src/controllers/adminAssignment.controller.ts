@@ -424,10 +424,12 @@ export async function getEmployeesList(req: Request, res: Response, next: NextFu
 export async function toggleEmployeeStatus(req: Request, res: Response, next: NextFunction) {
   try {
     const userRole = (req as any).userRole;
-    if (!isSystemAdmin(userRole, req.user?.email)) {
+    const isSuperAdmin = isSystemAdmin(userRole, req.user?.email);
+    const isManager = isSuperAdmin || userRole === 'Manager';
+    if (!isManager) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied. Only Admins can manage employee statuses.',
+        message: 'Access denied. Only Admins and Managers can manage employee statuses.',
         errorCode: 'FORBIDDEN'
       });
     }
@@ -463,6 +465,15 @@ export async function toggleEmployeeStatus(req: Request, res: Response, next: Ne
       });
     }
 
+    // Managers cannot deactivate other Managers; only Admins can
+    if (targetRoleName === 'Manager' && !isSuperAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Managers cannot deactivate other Managers.',
+        errorCode: 'CANNOT_DEACTIVATE_MANAGER'
+      });
+    }
+
     user.status = status || (user.status === 'active' ? 'inactive' : 'active');
     await user.save();
 
@@ -485,14 +496,16 @@ export async function toggleEmployeeStatus(req: Request, res: Response, next: Ne
   }
 }
 
-// DELETE EMPLOYEE & SAFELY TRANSFER ASSIGNED LEADS TO UNASSIGNED QUEUE (Admin only)
+// DELETE EMPLOYEE & SAFELY TRANSFER ASSIGNED LEADS TO UNASSIGNED QUEUE (Admin & Manager)
 export async function deleteEmployee(req: Request, res: Response, next: NextFunction) {
   try {
     const userRole = (req as any).userRole;
-    if (!isSystemAdmin(userRole, req.user?.email)) {
+    const isSuperAdmin = isSystemAdmin(userRole, req.user?.email);
+    const isManager = isSuperAdmin || userRole === 'Manager';
+    if (!isManager) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied. Only Admins can delete employees.',
+        message: 'Access denied. Only Admins and Managers can delete employees.',
         errorCode: 'FORBIDDEN'
       });
     }
@@ -504,7 +517,7 @@ export async function deleteEmployee(req: Request, res: Response, next: NextFunc
     if (id === adminId) {
       return res.status(400).json({
         success: false,
-        message: 'You cannot delete your own Admin account.',
+        message: 'You cannot delete your own account.',
         errorCode: 'CANNOT_DELETE_SELF'
       });
     }
@@ -537,6 +550,16 @@ export async function deleteEmployee(req: Request, res: Response, next: NextFunc
         success: false,
         message: 'Admin accounts cannot be deleted.',
         errorCode: 'CANNOT_DELETE_ADMIN'
+      });
+    }
+
+    // Only one difference between Admin and Manager:
+    // Admin can delete Manager, but Manager cannot delete Manager!
+    if (targetRoleName === 'Manager' && !isSuperAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Managers cannot delete other Managers. Only Admins can delete Managers.',
+        errorCode: 'CANNOT_DELETE_MANAGER'
       });
     }
 
