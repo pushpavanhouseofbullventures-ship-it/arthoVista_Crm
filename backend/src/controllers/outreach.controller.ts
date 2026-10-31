@@ -29,14 +29,27 @@ export async function getFollowUps(req: Request, res: Response, next: NextFuncti
     const userId = req.user?.id;
     const { status, channel, period, assignedTo, leadId, customerId } = req.query;
 
-    // Purge historical orphan unmatched SIM calls (spam, personal, non-CRM numbers)
+    // Purge historical follow-ups belonging to deleted leads or pure orphans
     try {
+      const deletedLeads = await prisma.lead.findMany({
+        where: { organizationId: orgId, isDeleted: true },
+        select: { id: true }
+      });
+      if (deletedLeads.length > 0) {
+        const deletedIds = deletedLeads.map((l) => l.id);
+        await prisma.followUp.deleteMany({
+          where: {
+            organizationId: orgId,
+            leadId: { in: deletedIds }
+          }
+        });
+      }
+
       await prisma.followUp.deleteMany({
         where: {
           organizationId: orgId,
           leadId: null,
-          customerId: null,
-          purpose: { contains: 'SIM Call' }
+          customerId: null
         }
       });
     } catch (e) {
@@ -94,29 +107,35 @@ export async function getFollowUps(req: Request, res: Response, next: NextFuncti
 
     const [followups, allForStats] = await Promise.all([
       FollowUp.find(query)
-        .populate('leadId', 'name company email phone whatsApp leadId score scoreCategory serviceInterested')
+        .populate('leadId', 'name company email phone whatsApp leadId score scoreCategory serviceInterested isDeleted')
         .populate('customerId', 'name companyName email phone customerId')
         .populate('assignedTo', 'firstName lastName email')
         .sort({ date: 1, time: 1 }),
       FollowUp.find(statsQuery)
+        .populate('leadId', 'id leadId isDeleted')
     ]);
 
-    // Only keep matched CRM Leads/Customers or manually scheduled CRM follow-ups
-    const validFollowups = followups.filter((f: any) => {
+    // Only keep followups where the associated lead is active (not deleted) or linked to valid customer
+    const isValidFollowUpRecord = (f: any) => {
+      // If linked to a lead, the lead must exist and NOT be soft deleted
+      if (f.leadId) {
+        if (typeof f.leadId === 'object') {
+          if (f.leadId.isDeleted === true) return false;
+          if (!f.leadId.id && !f.leadId._id && !f.leadId.name && !f.leadId.leadId) return false;
+        }
+      } else if (!f.customerId && !f.lead && !f.customer) {
+        // Pure orphan without lead and without customer
+        return false;
+      }
       const isSimCall = f.purpose && /SIM Call/i.test(f.purpose);
       if (isSimCall) {
         return Boolean(f.leadId || f.customerId || f.lead || f.customer);
       }
       return true;
-    });
+    };
 
-    const validForStats = allForStats.filter((f: any) => {
-      const isSimCall = f.purpose && /SIM Call/i.test(f.purpose);
-      if (isSimCall) {
-        return Boolean(f.leadId || f.customerId || f.lead || f.customer);
-      }
-      return true;
-    });
+    const validFollowups = followups.filter(isValidFollowUpRecord);
+    const validForStats = allForStats.filter(isValidFollowUpRecord);
 
     let totalCount = 0;
     let waCount = 0;

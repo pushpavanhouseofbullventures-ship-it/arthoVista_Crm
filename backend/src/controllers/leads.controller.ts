@@ -1279,6 +1279,17 @@ export async function bulkUpdateLeads(req: Request, res: Response, next: NextFun
       update.$addToSet = { tags: tag };
     } else if (action === 'delete') {
       update.isDeleted = true;
+      // Cascade delete all associated follow-ups for deleted leads
+      try {
+        await prisma.followUp.deleteMany({
+          where: {
+            organizationId: orgId,
+            leadId: { in: leadIds }
+          }
+        });
+      } catch (err) {
+        logger.error('Failed to cascade delete bulk followups:', err);
+      }
     }
 
     await Lead.updateMany(filter, update);
@@ -1551,6 +1562,18 @@ export async function deleteLead(req: Request, res: Response, next: NextFunction
 
     if (!lead) {
       return res.status(404).json({ success: false, message: 'Lead not found.' });
+    }
+
+    // Cascade delete any follow-up tasks associated with this lead
+    try {
+      await prisma.followUp.deleteMany({
+        where: {
+          organizationId: orgId,
+          leadId: id as string
+        }
+      });
+    } catch (err) {
+      logger.error('Failed to cascade delete followups for lead:', err);
     }
 
     await AuditLog.create({

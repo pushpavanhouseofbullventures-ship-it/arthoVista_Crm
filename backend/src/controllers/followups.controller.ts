@@ -45,14 +45,23 @@ export async function getFollowUps(req: Request, res: Response, next: NextFuncti
     }
 
     const followups = await FollowUp.find(query)
-      .populate('leadId', 'name company email phone leadId')
+      .populate('leadId', 'name company email phone leadId isDeleted')
       .populate('customerId', 'name companyName email phone customerId')
       .populate('assignedTo', 'firstName lastName')
       .sort({ date: 1, time: 1 });
 
+    const activeFollowups = followups.filter((f: any) => {
+      if (f.leadId) {
+        if (typeof f.leadId === 'object' && f.leadId.isDeleted === true) return false;
+      } else if (!f.customerId) {
+        return false;
+      }
+      return true;
+    });
+
     return res.json({
       success: true,
-      data: followups
+      data: activeFollowups
     });
   } catch (error) {
     next(error);

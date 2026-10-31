@@ -413,6 +413,11 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
     onSuccess: (data) => {
       alert(data.message || 'Bulk operation completed.');
       queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['followups-badge-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['followups-planner'] });
+      queryClient.invalidateQueries({ queryKey: ['outreach-followups'] });
+      queryClient.invalidateQueries({ queryKey: ['leads-pipeline-counts'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
       setSelectedLeads([]);
     },
     onError: (err: any) => {
@@ -429,6 +434,11 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
     onSuccess: (data) => {
       alert(data.message || 'Lead deleted successfully.');
       queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['followups-badge-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['followups-planner'] });
+      queryClient.invalidateQueries({ queryKey: ['outreach-followups'] });
+      queryClient.invalidateQueries({ queryKey: ['leads-pipeline-counts'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
       setSelectedLeads([]);
     },
     onError: (err: any) => {
