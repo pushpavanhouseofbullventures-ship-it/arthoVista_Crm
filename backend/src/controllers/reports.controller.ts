@@ -325,7 +325,7 @@ export async function getCrmDashboardMetrics(req: Request, res: Response, next: 
           openLeads: openLeads.length,
           convertedLeads: convertedLeads.length,
           lostLeads: lostLeads.length,
-          totalFollowups,
+          totalFollowups: pendingFollowups.length,
           pendingFollowups: pendingFollowups.length,
           completedFollowups: completedFollowups.length,
           overdueFollowups: overdueFollowups.length,
@@ -335,7 +335,8 @@ export async function getCrmDashboardMetrics(req: Request, res: Response, next: 
           totalPipelineValue,
           wonRevenue,
           conversionRate,
-          lossRate
+          lossRate,
+          historicalTotalFollowups: totalFollowups
         },
         monthlyTrends,
         statusBreakdown,

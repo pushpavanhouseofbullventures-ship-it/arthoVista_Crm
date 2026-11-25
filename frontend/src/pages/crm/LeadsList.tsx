@@ -617,7 +617,7 @@ export const LeadsList: React.FC<LeadsListProps> = ({ defaultMode }) => {
     staleTime: 60 * 1000
   });
 
-  const followupTotalCount = followupsBadgeResponse?.stats?.total ?? followupsBadgeResponse?.data?.length ?? 0;
+  const followupTotalCount = (followupsBadgeResponse?.stats?.pending ?? 0) + (followupsBadgeResponse?.stats?.upcoming ?? 0) || (followupsBadgeResponse?.stats?.pending ?? followupsBadgeResponse?.data?.filter((f: any) => f.status === 'pending')?.length ?? 0);
 
   const currentTheme = isLeadsMode ? STAGE_THEMES.all : (STAGE_THEMES[currentMode] || STAGE_THEMES.all);
 

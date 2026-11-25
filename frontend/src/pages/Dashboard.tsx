@@ -182,10 +182,14 @@ export const Dashboard: React.FC = () => {
 
           <div className="mt-4">
             <div className="text-3xl font-black text-amber-700 dark:text-amber-300 tracking-tight">
-              {summary.totalFollowups}
+              {summary.pendingFollowups ?? summary.totalFollowups}
             </div>
             <div className="text-xs text-amber-700 dark:text-amber-300 font-bold mt-1.5">
-              {summary.todayFollowupsCount} Scheduled Today
+              {summary.todayFollowupsCount > 0
+                ? `${summary.todayFollowupsCount} Scheduled Today`
+                : summary.overdueFollowups > 0
+                  ? `${summary.overdueFollowups} Overdue`
+                  : 'Pending Action'}
             </div>
           </div>
         </Link>

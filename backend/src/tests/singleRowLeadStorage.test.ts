@@ -369,3 +369,4 @@ test('Mobile SIM Sync Logs - Active leads return their single-row call history w
   assert.equal(activeLogs[0].leadName, 'Lead Customer 24');
   assert.equal(activeLogs[0].duration, 45);
 });
+

@@ -20,9 +20,12 @@ export function handleLeadDeletionSuccess(queryClient: MockQueryClient) {
   queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
 }
 
-// Function simulating Follow-up Tab Badge count calculation
+// Function simulating Follow-up Tab Badge count calculation (only pending/upcoming follow-ups)
 export function computeFollowupBadgeCount(followupsBadgeResponse: any): number {
-  return followupsBadgeResponse?.stats?.total ?? followupsBadgeResponse?.data?.length ?? 0;
+  if (followupsBadgeResponse?.stats?.pending !== undefined) {
+    return (followupsBadgeResponse.stats.pending ?? 0) + (followupsBadgeResponse.stats.upcoming ?? 0);
+  }
+  return followupsBadgeResponse?.data?.filter((f: any) => f.status === 'pending' || !f.status)?.length ?? 0;
 }
 
 test('Frontend Lead Delete - Invalidates follow-up query keys on single or bulk delete', () => {
@@ -63,5 +66,20 @@ test('Frontend Badge - Returns correct count when active follow-ups exist', () =
 
   const count = computeFollowupBadgeCount(activeBadgeResponse);
   assert.equal(count, 2, 'Followup badge must display 2 when 2 active follow-ups exist');
+});
+
+test('Frontend Badge - Ignores completed historical calls and displays strictly pending follow-ups', () => {
+  const mixedResponse = {
+    data: [{ id: 'f1', status: 'pending' }],
+    stats: {
+      total: 115,
+      completed: 114,
+      pending: 1,
+      upcoming: 0,
+    }
+  };
+
+  const count = computeFollowupBadgeCount(mixedResponse);
+  assert.equal(count, 1, 'Followup badge must display 1 (only pending), not 115 (total)');
 });
 
