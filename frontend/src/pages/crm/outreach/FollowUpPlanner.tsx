@@ -1,13 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../../services/api';
-import { 
-  Calendar, Phone, Mail, MessageSquare, Plus, 
-  CheckCircle2, AlertCircle, X, 
+import {
+  Calendar, Phone, Mail, MessageSquare, Plus,
+  CheckCircle2, AlertCircle, X,
   ExternalLink, Send, RefreshCw, Search,
   Clock, PhoneCall,
   Users, Trophy, XCircle,
-  Copy, Check, Eye, GitBranch, Filter
+  Copy, Check, Eye, Filter
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -529,26 +529,6 @@ export const FollowUpPlanner: React.FC = () => {
         <div className="h-[2px] w-full brand-tri-45" />
 
         <div className="p-3 sm:p-4 space-y-3.5">
-          {/* Pipeline Context Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pb-0.5">
-            <div className="flex items-center space-x-2">
-              <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                <GitBranch className="h-3 w-3" />
-                <span>Lifecycle Pipeline</span>
-              </span>
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 hidden sm:inline">
-                Active View: <strong className="text-slate-800 dark:text-slate-200">Follow-Up Outreach</strong>
-              </span>
-            </div>
-            <div className="flex items-center space-x-3 text-xs text-slate-500 dark:text-slate-400">
-              <span className="flex items-center space-x-1.5">
-                <span>Total Funnel Leads:</span>
-                <span className="font-extrabold text-slate-900 dark:text-white bg-slate-100 dark:bg-dark-800 px-2 py-0.5 rounded-md border border-slate-200/80 dark:border-dark-700">
-                  {leadCounts.all ?? 0}
-                </span>
-              </span>
-            </div>
-          </div>
 
           {/* Row 1: Pipeline Stage Tabs (Merged 4-tab grid: Leads, Follow-Up, Converted, Lost Leads) */}
           <div className="w-full grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-2 sm:gap-2.5">
@@ -631,19 +611,17 @@ export const FollowUpPlanner: React.FC = () => {
                       setPeriodFilter('pending');
                       setStatusFilter('pending');
                     }}
-                    className={`flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
-                      subPipeline === 'pending'
+                    className={`flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${subPipeline === 'pending'
                         ? 'btn-blue-45 text-white shadow-xs ring-1 ring-blue-400/30'
                         : 'bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 hover:border-blue-400/60'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center space-x-2 truncate">
                       <Clock className="h-4 w-4 shrink-0" />
                       <span className="truncate">Pending</span>
                     </div>
-                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                      subPipeline === 'pending' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
-                    }`}>
+                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${subPipeline === 'pending' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
+                      }`}>
                       {stats.pending ?? 0}
                     </span>
                   </button>
@@ -656,19 +634,17 @@ export const FollowUpPlanner: React.FC = () => {
                       setPeriodFilter('upcoming');
                       setStatusFilter('pending');
                     }}
-                    className={`flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
-                      subPipeline === 'upcoming'
+                    className={`flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${subPipeline === 'upcoming'
                         ? 'bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-xs ring-1 ring-amber-400/30'
                         : 'bg-white dark:bg-dark-800/90 hover:bg-slate-100 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border-slate-200/70 dark:border-dark-700 hover:border-amber-400/60'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center space-x-2 truncate">
                       <Calendar className="h-4 w-4 shrink-0" />
                       <span className="truncate">Upcoming</span>
                     </div>
-                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${
-                      subPipeline === 'upcoming' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
-                    }`}>
+                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-black shrink-0 ml-1.5 ${subPipeline === 'upcoming' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-slate-300'
+                      }`}>
                       {stats.upcoming ?? 0}
                     </span>
                   </button>
@@ -851,12 +827,11 @@ export const FollowUpPlanner: React.FC = () => {
                       {/* 2. LEAD DETAILS */}
                       <td className="p-3">
                         <div className="flex items-center space-x-2.5">
-                          <div className={`w-8 h-8 rounded-lg font-black text-xs flex items-center justify-center shrink-0 border ${
-                            statusInfo.type === 'overdue' ? 'bg-rose-50 text-rose-700 border-rose-200/60 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800/40' :
-                            statusInfo.type === 'today' ? 'bg-amber-50 text-amber-700 border-amber-200/60 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/40' :
-                            statusInfo.type === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/40' :
-                            'bg-blue-50 text-blue-700 border-blue-200/60 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800/40'
-                          }`}>
+                          <div className={`w-8 h-8 rounded-lg font-black text-xs flex items-center justify-center shrink-0 border ${statusInfo.type === 'overdue' ? 'bg-rose-50 text-rose-700 border-rose-200/60 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800/40' :
+                              statusInfo.type === 'today' ? 'bg-amber-50 text-amber-700 border-amber-200/60 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/40' :
+                                statusInfo.type === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/40' :
+                                  'bg-blue-50 text-blue-700 border-blue-200/60 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800/40'
+                            }`}>
                             {initials}
                           </div>
                           <div className="min-w-0">
@@ -914,12 +889,11 @@ export const FollowUpPlanner: React.FC = () => {
                           type="button"
                           onClick={() => handleOpenRescheduleModal(item)}
                           title="Click to reschedule Follow-up date & time"
-                          className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold border transition hover:scale-105 active:scale-95 shadow-xs cursor-pointer ${
-                            statusInfo.type === 'overdue' ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border-rose-300 dark:border-rose-800' :
-                            statusInfo.type === 'today' ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-amber-300 dark:border-amber-800' :
-                            statusInfo.type === 'completed' ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800' :
-                            'bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border-blue-200/80 dark:border-blue-800/80'
-                          }`}
+                          className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold border transition hover:scale-105 active:scale-95 shadow-xs cursor-pointer ${statusInfo.type === 'overdue' ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border-rose-300 dark:border-rose-800' :
+                              statusInfo.type === 'today' ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-amber-300 dark:border-amber-800' :
+                                statusInfo.type === 'completed' ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800' :
+                                  'bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border-blue-200/80 dark:border-blue-800/80'
+                            }`}
                         >
                           <Clock className="w-3 h-3" />
                           <span>{new Date(item.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} {item.time || '11:00 AM'}</span>
